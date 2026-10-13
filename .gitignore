@@ -1,0 +1,22 @@
+
+# Dependencies
+node_modules/
+
+# Vercel
+.vercel/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Personal Jotboard backups
+jotboard-backup-*.json

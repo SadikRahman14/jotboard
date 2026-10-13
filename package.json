@@ -1,0 +1,8 @@
+{
+  "name": "jotboard-local-notes",
+  "private": true,
+  "version": "2.0.0",
+  "description": "A minimal, local-first notes application",
+  "scripts": {"start": "node server.cjs", "test": "node --check app.js && node --check server.cjs"},
+  "engines": {"node": ">=18"}
+}
