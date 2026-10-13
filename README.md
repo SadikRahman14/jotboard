@@ -1,70 +1,230 @@
-# Jotboard — Minimal UI (v2)
 
-A **working, local-first note website** inspired by the simplicity of Google Keep, with editable card widths, a balanced dense-grid layout, Markdown import and preview, rich-text coloring, proper tables, custom note backgrounds and an optional workspace wallpaper.
+# Jotboard
 
-## Run it on Windows
+Jotboard is a lightweight, browser-based note-taking application designed for simplicity, flexibility, and efficient note management. Inspired by Google Keep, it provides a clean interface with advanced formatting, Markdown support, customizable note layouts, and local data storage.
 
-1. **Extract the whole ZIP.** Don't run it from inside the compressed archive.
-2. **Double-click `START-WINDOWS.bat`.** It uses Node.js if available, or Python 3 as a fallback.
-3. Go to **http://127.0.0.1:4173** if the browser doesn't open automatically.
+The application is built with HTML, CSS, and JavaScript, without requiring a frontend framework or external runtime dependencies.
 
-If Node.js is not installed, download it from https://nodejs.org/ (LTS), then double-click the `.bat` again. No `npm install` is needed, and there are **no external runtime dependencies**.
+## Features
 
-You can also run `node server.cjs` (or `npm start`) inside the extracted directory. On macOS/Linux, install Node.js 18+ and run `node server.cjs`.
+### Note Management
+- Create, edit, duplicate, pin, archive, and delete notes.
+- Organize notes using labels and custom sorting.
+- Adjust individual note widths.
+- Rearrange notes using drag-and-drop.
+- Switch between grid and list views.
+- Search notes by title, content, or labels.
+- Restore deleted notes from the trash.
 
-**Before updating from v1:** Export a JSON backup from Appearance & backup / Settings. Close the old server in VS Code with Ctrl+C, then run v2. Existing notes are preserved when you keep the same browser and address.
+### Text Editing
+- Rich-text editor with headings and text formatting.
+- Multiple font families.
+- Custom text colors and highlighting.
+- Bulleted lists, numbered lists, and checklists.
+- Tables, hyperlinks, and blockquotes.
+- Adjustable editor widths.
+- Automatic saving while editing.
 
-**Important:** Keep using the same local address (`http://127.0.0.1:4173`) and the same browser profile. Notes are stored by *browser origin*. Changing the address or using a different browser shows a different local database.
+### Markdown Support
+- Import Markdown (`.md`, `.markdown`) and text files.
+- Edit Markdown source directly.
+- Preview rendered Markdown.
+- Convert Markdown into visually formatted notes.
+- Support for common GitHub-flavored Markdown (GFM) syntax.
+- Export individual notes as Markdown files.
 
-## What changed in v2
+### Customization
+- Dark and light themes.
+- Custom background colors for individual notes.
+- Custom background images.
+- Optional workspace wallpaper.
+- Responsive interface for desktop and mobile devices.
 
-- Removed the promotional home-page heading, description, and large empty-state copy.
-- Search and the icon-only Markdown importer are now in the top bar, with notes directly underneath.
-- The note window has square corners, tighter spacing and a smaller title field.
-- Replaced the glitch-prone editor width slider with Narrow / Medium / Wide presets.
-- Removed the editor's Card Width field and the card's quick-cycling button. Card width is now selected only from the saved card's `...` menu.
-- Existing notes, colors, width settings, and backups remain compatible; the IndexedDB name is unchanged. New installations start with an empty board.
+### Data Management
+- Automatic local storage using IndexedDB.
+- Export all notes and settings as a JSON backup.
+- Restore notes from a previously exported JSON file.
+- Preserve supported formatting, labels, backgrounds, and note metadata in backups.
+- No account registration required.
 
-## Working features
+## Getting Started
 
-- **Adjust every card's width:** Open a saved note card's `...` menu and choose Compact, Medium, Wide or Full width. Drag cards to reorder them. A dense grid packs cards into unused gaps.
-- **Cards with tidy previews:** Long notes are previewed at a limited height instead of stretching the entire board. Open any card for the complete content.
-- **Visual rich editor:** H1/H2/H3, bold, italic, underline, strikethrough, ordered/bulleted lists, blockquotes, clickable links, text color and highlights, editable tables, and checklists. The editor has three fixed width presets (Narrow, Medium, Wide), accessible at the top of the editor.
-- **Markdown:** Import one or more `.md`/`.markdown` files. Markdown notes retain their original source and render headings, tables, links, code blocks, lists, checkboxes, bold/italic, blockquotes and other GFM features with the included open-source Marked parser. Edit the Markdown source or convert it to a visual note.
-- **Better tables:** Import Markdown tables or paste tab-separated spreadsheet data into the visual editor to create HTML tables. Tables preserve aligned columns and scroll horizontally as needed.
-- **Customization:** Per-note dark color palettes, per-note background images, optional workspace image wallpaper, dark/light modes, and tags.
-- **Finding & organizing:** Search contents/title/tags, pin, tag filters, archive, trash/restore, manual order (drag-and-drop), recent/oldest/alphabetical sorting, grid/list view.
-- **Files:** Individual `.md` export, full JSON backup/restore including rich content, colors, uploaded image backgrounds, and timestamps.
-- **Local autosave:** Notes save in IndexedDB, with no account or server-side storage. The Node server merely serves static files on your own PC.
+### Prerequisites
 
-## Keyboard shortcuts
+- A modern web browser such as Google Chrome, Microsoft Edge, or Firefox.
+- Node.js 18 or later (recommended for local development).
+
+Download Node.js from [nodejs.org](https://nodejs.org/).
+
+### Installation
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/jotboard.git
+   ```
+
+2. Navigate to the project directory:
+
+   ```bash
+   cd jotboard
+   ```
+
+3. Start the local development server:
+
+   ```bash
+   npm start
+   ```
+
+4. Open the application in your browser:
+
+   ```
+   http://127.0.0.1:4173
+   ```
+
+No additional package installation is required.
+
+### Alternative: Windows
+
+Windows users can launch the application by running:
+
+```
+START-WINDOWS.bat
+```
+
+The launcher uses Node.js when available or Python 3 as a fallback.
+
+## Project Structure
+
+```text
+jotboard/
+├── index.html
+├── styles.css
+├── app.js
+├── package.json
+├── server.cjs
+├── START-WINDOWS.bat
+├── vendor/
+│   ├── marked.js
+│   └── MARKED-LICENSE.txt
+├── .gitignore
+└── README.md
+```
+
+| File | Description |
+|------|-------------|
+| `index.html` | Application structure and interface |
+| `styles.css` | Layout, styling, and responsive design |
+| `app.js` | Application logic and note management |
+| `package.json` | Project configuration and scripts |
+| `server.cjs` | Local development server |
+| `START-WINDOWS.bat` | Windows launcher |
+| `vendor/` | Bundled Markdown parser and license |
+
+## Keyboard Shortcuts
 
 | Shortcut | Action |
-|---|---|
-| `N` (outside inputs) | New note |
-| `Ctrl+K` / `Cmd+K` | Search |
-| `Ctrl+S` / `Cmd+S` | Save (or export backup outside editor) |
-| `Esc` | Close editor/settings |
+|----------|--------|
+| `N` | Create a new note |
+| `Ctrl + K` | Focus search |
+| `Ctrl + S` | Save the current note or export a backup |
+| `Esc` | Close the active editor or dialog |
 
-## Limitations and data safety
+On macOS, use `Cmd` instead of `Ctrl` where applicable.
 
-- This version is **local-only**. It does not sync to Google Keep or across devices, support multiple users or collaborate, or connect to Google accounts.
-- The note data is stored in your browser's IndexedDB for `127.0.0.1:4173`. **Clear browser/site data = lose your notes.** Export JSON backups regularly. Incognito/private mode is not reliable for persistent storage.
-- Markdown supports common **GitHub-flavored Markdown** features via an included version of Marked. Markdown isn't a single universal standard, and platform-specific extensions (Mermaid rendering, LaTeX equations, embedded custom HTML/JS, every plugin dialect) are **not** fully implemented. Unsafe raw HTML is sanitized to protect your notes.
-- Text-specific colors, arbitrary embedded HTML styles and exact rich-editor formatting cannot all be represented by standard Markdown. **JSON backups preserve formatting** more faithfully than exported `.md` files.
-- Pasted external images in rich notes and image backgrounds consume browser storage; very large files can exceed the browser quota. Uploaded backgrounds are scaled and converted to JPEG (animated GIFs become still frames).
-- Rich text uses browser `contenteditable` and standard editing commands; editing behavior for some complex tables may vary by browser. Test with Chrome or Edge.
-- This is a self-contained MVP, not a security-audited, multi-user production service.
+## Data Storage and Privacy
 
-## Structure
+Jotboard follows a local-first approach.
 
-- `index.html` — application markup
-- `styles.css` — responsive design and themes
-- `app.js` — note editing, Markdown handling, local storage and import/export
-- `vendor/marked.js` — Markdown parsing library (MIT licensed)
-- `server.cjs` — minimal, dependency-free local Node web server
-- `START-WINDOWS.bat` — one-click Windows launcher
+Notes and application settings are stored in the browser using IndexedDB. The application does not require a user account or a remote database.
 
-## Dependencies / license
+**Important considerations:**
 
-The `vendor/marked.js` file is a locally bundled copy of **Marked** from the Jupyter nbclassic distribution, copyright (c) 2011–2022 Christopher Jeffrey and contributors, MIT licensed. See `vendor/MARKED-LICENSE.txt`. Jotboard's new code is provided for experimentation and personal use.
+- Notes are stored separately for each browser and website origin.
+- Data is not automatically synchronized across devices.
+- Clearing browser storage may permanently remove saved notes.
+- Private or incognito browsing is not recommended for persistent storage.
+- Users should regularly export JSON backups to protect their data.
+
+The application includes a local-storage information notice and a JSON backup download feature.
+
+## Import and Export
+
+### Markdown Import
+
+Users can import supported Markdown files through the application interface. Imported files are converted into notes while retaining their Markdown source.
+
+### Markdown Export
+
+Individual notes can be exported as `.md` files.
+
+Some visual formatting, including custom fonts, text colors, and backgrounds, cannot be represented in standard Markdown.
+
+### JSON Backup
+
+The JSON backup feature exports saved notes and application settings, including supported rich-text formatting and note backgrounds.
+
+Backups can be restored through the Settings interface.
+
+**Warning:** Restoring a JSON backup replaces existing notes in the current browser. Export the current data before restoring another backup.
+
+## Deployment
+
+Jotboard can be deployed using static website hosting services, including:
+
+- Vercel
+- Netlify
+- Cloudflare Pages
+- GitHub Pages
+
+For static deployment, upload the application files and configure the hosting service to serve `index.html` as the entry point.
+
+No production Node.js server or build process is required for the current application.
+
+Ensure that all referenced assets, including the `vendor` directory, are included in the deployment.
+
+## Limitations
+
+- No cloud synchronization or multi-device account system.
+- No real-time collaboration.
+- Local data may be lost if browser storage is cleared.
+- Advanced Markdown extensions are not fully supported.
+- Some rich-text formatting may not survive Markdown conversion.
+- Large embedded images may exceed browser storage limits.
+- Complex rich-text editing behavior may vary between browsers.
+
+Jotboard is intended as a lightweight, local-first note-taking application rather than a full collaborative document platform.
+
+## Technologies
+
+- HTML5
+- CSS3
+- JavaScript (ES6+)
+- IndexedDB
+- Marked (Markdown parser)
+- Node.js (local development server)
+
+## Third-Party Licenses
+
+Jotboard includes the open-source Marked library for Markdown rendering.
+
+Marked is distributed under the MIT License.
+
+The corresponding license information is available in:
+
+`vendor/MARKED-LICENSE.txt`
+
+## Contributing
+
+Contributions, bug reports, and suggestions are welcome.
+
+To contribute:
+
+1. Fork the repository.
+2. Create a branch for your changes.
+3. Implement and test your modifications.
+4. Submit a pull request describing your changes.
+
+## Project Status
+
+Jotboard is under active development. The project focuses on providing a minimal, customizable, and reliable note-taking experience.
