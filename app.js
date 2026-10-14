@@ -1,4 +1,3 @@
-
 /* Jotboard — local-first notes. No remote APIs or runtime dependencies. */
 (() => {
   'use strict';
@@ -179,8 +178,14 @@
     $('currentSectionName').textContent = name;
     $('boardHeading').textContent = state.search ? 'Search results' : state.tag ? name : ({ all: 'Notes', pinned: 'Pinned', archived: 'Archive', trash: 'Trash' }[state.filter] || 'Notes');
     $('sortSelect').value = state.settings.sort;
-    $('gridView').classList.toggle('is-active', state.settings.view === 'grid'); $('listView').classList.toggle('is-active', state.settings.view === 'list');
+    for (const [buttonId, value] of [['gridView','grid'], ['customView','custom'], ['listView','list']]) {
+      const active = state.settings.view === value;
+      $(buttonId).classList.toggle('is-active', active);
+      $(buttonId).setAttribute('aria-pressed', String(active));
+    }
+    // Hide the new-note menu if the quick composer is unavailable.
     $('quickCompose').hidden = state.filter === 'trash';
+    if (state.filter === 'trash') hideNoteTypeMenu();
   }
   function renderCard(note) {
     const bg = palette(note.color); const img = safeImgUrl(note.backgroundImage); const width = COLUMNS.includes(Number(note.width)) ? Number(note.width) : 4;
@@ -189,8 +194,8 @@
     const plain = note.type === 'markdown' ? note.markdown || '' : stripHTML(note.html || '');
     const isLong = plain.length > 210 || /\<table|\<pre|\<ul|\<ol/i.test(content) && plain.length > 110;
     const menu = state.openMenu === note.id ? `<div class="note-menu" data-menu="1"><div class="menu-header">WIDTH</div>${[4, 6, 8, 12].map((w, i) => `<button type="button" data-action="width" data-width="${w}" class="${width === w ? 'selected' : ''}">${ico('move-horizontal', 'sm')} ${['Compact', 'Medium', 'Wide', 'Full width'][i]}${width === w ? ' · ✓' : ''}</button>`).join('')}<hr/>${note.deleted ? `<button type="button" data-action="restore">${ico('restore')} Restore note</button><button type="button" data-action="delete-forever">${ico('trash')} Delete forever</button>` : `<button type="button" data-action="duplicate">${ico('copy')} Duplicate</button><button type="button" data-action="export">${ico('download')} Export .md</button><button type="button" data-action="${note.archived ? 'unarchive' : 'archive'}">${ico('archive')} ${note.archived ? 'Unarchive' : 'Archive'}</button><button type="button" data-action="trash">${ico('trash')} Move to trash</button>`}</div>` : '';
-    return `<article tabindex="0" draggable="${note.deleted ? 'false' : 'true'}" role="button" aria-label="Open ${esc(note.title || 'Untitled note')}" data-id="${esc(note.id)}" data-width="${width}" class="note-card ${img ? 'has-image' : ''} ${note.deleted ? 'is-trash' : ''} ${state.openMenu === note.id ? 'has-open-menu' : ''}" style="--span:${width};--note-bg:${bg.hex};--note-ink:#f7f8fa;${cardBg}">
-      <div class="note-heading"><h3>${esc(note.title || 'Untitled note')}</h3>${note.pinned ? `<span class="pin-indicator" title="Pinned">${ico('pin', 'sm')}</span>` : ''}</div>
+    return `<article tabindex="0" draggable="${note.deleted ? 'false' : 'true'}" role="button" aria-label="Open ${esc(note.title || 'Untitled note')}" data-id="${esc(note.id)}" data-type="${note.type === 'markdown' ? 'markdown' : 'rich'}" data-width="${width}" class="note-card ${img ? 'has-image' : ''} ${note.deleted ? 'is-trash' : ''} ${state.openMenu === note.id ? 'has-open-menu' : ''}" style="--span:${width};--note-bg:${bg.hex};--note-ink:#f7f8fa;${cardBg}">
+      <div class="note-heading"><h3>${esc(note.title || 'Untitled note')}</h3>${note.type === 'markdown' ? `<span class="note-kind" title="Markdown Note">MD</span>` : ''}${note.pinned ? `<span class="pin-indicator" title="Pinned">${ico('pin', 'sm')}</span>` : ''}</div>
       <div class="note-preview ${isLong ? 'is-long' : ''}">${content ? `<div class="note-content">${content}</div>` : '<div class="note-preview-empty">Empty note — click to write</div>'}</div>
       ${(note.tags || []).length ? `<div class="note-meta">${note.tags.slice(0, 4).map(t => `<span class="note-chip">#${esc(t)}</span>`).join('')}</div>` : '<div class="note-meta"></div>'}
       <div class="note-footer"><span class="note-date">${esc(elapsed(note.updatedAt))}</span>${note.deleted ? `<button class="card-button" data-action="restore" title="Restore">${ico('restore')}</button>` : `<button class="card-button ${note.pinned ? 'active' : ''}" data-action="pin" title="${note.pinned ? 'Unpin' : 'Pin'}">${ico('pin')}</button>`}<button class="card-button" data-action="menu" title="More options" aria-label="More options">${ico('more-vertical')}</button></div>${menu}
@@ -198,12 +203,29 @@
   }
   function measureGrid() {
     if (boardObserver) boardObserver.disconnect();
-    boardObserver = new ResizeObserver(entries => { if (state.settings.view === 'list' && window.innerWidth <= 760) return; for (const entry of entries) { const target = entry.target; const rowHeight = 8, gap = 17; const height = entry.borderBoxSize?.[0]?.blockSize || target.getBoundingClientRect().height; const span = Math.max(1, Math.ceil((height + gap) / (rowHeight + gap))); target.style.setProperty('--row-span', String(span)); } });
+    if (state.settings.view === 'list') return;
+    boardObserver = new ResizeObserver(entries => {
+      // Masonry-style rows are only needed for grids, not the list layout.
+      for (const entry of entries) {
+        const card = entry.target;
+        const height = entry.borderBoxSize?.[0]?.blockSize || card.getBoundingClientRect().height;
+        const computed = getComputedStyle($('notesGrid'));
+        const rowHeight = parseFloat(computed.gridAutoRows) || 8;
+        const gap = parseFloat(computed.rowGap) || 17;
+        card.style.setProperty('--row-span', String(Math.max(1, Math.ceil((height + gap) / (rowHeight + gap)))));
+      }
+    });
     document.querySelectorAll('.note-card').forEach(card => boardObserver.observe(card));
   }
   function renderBoard() {
-    renderNavigation(); const notes = visibleNotes(); $('resultsCount').textContent = String(notes.length);
-    const board = $('notesGrid'); board.classList.toggle('is-list', state.settings.view === 'list'); board.innerHTML = notes.map(renderCard).join('');
+    renderNavigation();
+    const notes = visibleNotes();
+    $('resultsCount').textContent = String(notes.length);
+    const board = $('notesGrid');
+    board.classList.toggle('is-list', state.settings.view === 'list');
+    board.classList.toggle('is-compact', state.settings.view === 'grid');
+    board.classList.toggle('is-custom', state.settings.view === 'custom');
+    board.innerHTML = notes.map(renderCard).join('');
     $('emptyState').hidden = notes.length > 0;
     if (!notes.length) $('emptyHeading').textContent = state.filter === 'trash' ? 'Trash is empty' : state.search ? 'No matching notes' : 'No notes yet';
     measureGrid();
@@ -215,7 +237,15 @@
   async function handleCardAction(action, note, button) {
     if (action === 'menu') { state.openMenu = state.openMenu === note.id ? null : note.id; renderBoard(); return; }
     if (action === 'pin') { await setNote(note.id, { pinned: !note.pinned }); toast(note.pinned ? 'Note pinned' : 'Note unpinned'); return; }
-    if (action === 'width') { state.openMenu = null; await setNote(note.id, { width: Number(button.dataset.width) }); toast('Card width updated'); return; }
+    if (action === 'width') {
+      state.openMenu = null;
+      // Width applies in Flexible grid; Compact/List must not be overridden.
+      state.settings.view = 'custom';
+      await Promise.all([setNote(note.id, { width: Number(button.dataset.width) }), persistSettings()]);
+      renderBoard();
+      toast('Card width updated');
+      return;
+    }
     if (action === 'duplicate') { const copy = { ...note, id: id(), title: (note.title || 'Untitled') + ' (copy)', pinned: false, createdAt: Date.now(), updatedAt: Date.now(), order: state.notes.length }; state.notes.push(copy); await saveSingle(copy); state.openMenu = null; renderBoard(); toast('Note duplicated'); return; }
     if (action === 'export') { downloadText((note.title || 'Untitled') + '.md', noteAsMarkdown(note), 'text/markdown;charset=utf-8'); state.openMenu = null; renderBoard(); return; }
     if (action === 'archive' || action === 'unarchive') { await setNote(note.id, { archived: action === 'archive', pinned: false }); state.openMenu = null; toast(action === 'archive' ? 'Note archived' : 'Note returned'); return; }
@@ -225,22 +255,56 @@
   }
   function renderSwatches() { if (!state.draft) return; $('backgroundColors').innerHTML = PALETTE.map(p => `<button type="button" class="color-swatch ${p.id === state.draft.color ? 'selected' : ''}" style="--swatch:${p.hex}" data-color="${p.id}" title="${esc(p.name)}" aria-label="${esc(p.name)}"></button>`).join(''); $('backgroundImageStatus').hidden = !state.draft.backgroundImage; }
   function draftFrom(note) { return JSON.parse(JSON.stringify(note)); }
-  function blankNote() { return { id: id(), title: '', type: 'rich', html: '', markdown: '', color: 'charcoal', width: 4, pinned: false, tags: [], archived: false, deleted: false, createdAt: Date.now(), updatedAt: Date.now(), order: state.notes.length, backgroundImage: null, editorWidth: 800 }; }
+  function blankNote(type = 'rich') { return { id: id(), title: '', type: type === 'markdown' ? 'markdown' : 'rich', html: '', markdown: '', color: 'charcoal', width: 4, pinned: false, tags: [], archived: false, deleted: false, createdAt: Date.now(), updatedAt: Date.now(), order: state.notes.length, backgroundImage: null, editorWidth: 800 }; }
+  // Rich Text and Markdown are permanent note formats, not interchangeable tabs.
+  // Preview never changes the stored content or its formatting.
   function displayEditorMode(mode) {
-    state.editorMode = mode; document.querySelectorAll('.editor-tab').forEach(b => b.classList.toggle('is-active', b.dataset.mode === mode));
-    $('editorToolbar').hidden = mode !== 'visual'; $('richEditor').hidden = mode !== 'visual'; $('markdownEditor').hidden = mode !== 'markdown'; $('previewEditor').hidden = mode !== 'preview';
+    if (!state.draft) return;
+    const isMarkdown = state.draft.type === 'markdown';
+    const editableMode = isMarkdown ? 'markdown' : 'visual';
+    if (mode !== editableMode && mode !== 'preview') mode = editableMode;
+    state.editorMode = mode;
+    document.querySelectorAll('.editor-tab').forEach(button => {
+      button.hidden = button.dataset.mode !== 'preview' && button.dataset.mode !== editableMode;
+      const active = button.dataset.mode === mode;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+    $('editorToolbar').hidden = mode !== 'visual';
+    $('richEditor').hidden = mode !== 'visual';
+    $('markdownEditor').hidden = mode !== 'markdown';
+    $('previewEditor').hidden = mode !== 'preview';
     if (mode === 'preview') $('previewEditor').innerHTML = noteHTML(state.draft);
   }
-  function openEditor(noteId = null) {
-    const original = noteId ? state.notes.find(n => n.id === noteId) : null; if (noteId && !original) return;
-    state.editingIsNew = !original; state.draft = draftFrom(original || blankNote()); state.openMenu = null;
-    $('editorTitle').value = state.draft.title || ''; $('richEditor').innerHTML = sanitizeHTML(state.draft.html || ''); $('markdownEditor').value = state.draft.markdown || '';
+  function openEditor(noteId = null, newType = 'rich') {
+    const original = noteId ? state.notes.find(n => n.id === noteId) : null;
+    if (noteId && !original) return;
+    hideNoteTypeMenu();
+    state.editingIsNew = !original;
+    state.draft = draftFrom(original || blankNote(newType));
+    state.openMenu = null;
+    $('editorTitle').value = state.draft.title || '';
+    $('richEditor').innerHTML = sanitizeHTML(state.draft.html || '');
+    $('markdownEditor').value = state.draft.markdown || '';
     $('editorTags').value = (state.draft.tags || []).join(', ');
     const editorWidth = [600, 800, 1040].reduce((a, b) => Math.abs(b - (Number(state.draft.editorWidth) || 800)) < Math.abs(a - (Number(state.draft.editorWidth) || 800)) ? b : a);
-    state.draft.editorWidth = editorWidth; $('editorWidthSelect').value = String(editorWidth); $('editorModal').style.setProperty('--editor-width', editorWidth + 'px');
-    $('editorPin').classList.toggle('is-on', state.draft.pinned); $('editorStatus').textContent = state.editingIsNew ? 'New note' : 'Editing note'; $('saveStatus').textContent = 'Saved';
-    renderSwatches(); displayEditorMode(state.draft.type === 'markdown' ? 'preview' : 'visual'); $('editorOverlay').hidden = false; document.body.style.overflow = 'hidden';
-    setTimeout(() => { if (state.editingIsNew) $('editorTitle').focus(); else if (state.draft.type === 'markdown') $('previewEditor').focus(); else $('richEditor').focus(); }, 40);
+    state.draft.editorWidth = editorWidth;
+    $('editorWidthSelect').value = String(editorWidth);
+    $('editorModal').style.setProperty('--editor-width', editorWidth + 'px');
+    $('editorModal').dataset.noteType = state.draft.type === 'markdown' ? 'markdown' : 'rich';
+    $('editorPin').classList.toggle('is-on', state.draft.pinned);
+    $('editorKind').textContent = state.draft.type === 'markdown' ? 'Markdown' : 'Rich text';
+    $('editorStatus').textContent = state.editingIsNew ? 'New note' : 'Editing note';
+    $('saveStatus').textContent = 'Saved';
+    renderSwatches();
+    displayEditorMode(state.draft.type === 'markdown' ? 'markdown' : 'visual');
+    $('editorOverlay').hidden = false;
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => {
+      if (state.editingIsNew) $('editorTitle').focus();
+      else if (state.draft?.type === 'markdown') $('markdownEditor').focus();
+      else $('richEditor').focus();
+    }, 40);
   }
   function getLatestEditorContent() { if (!state.draft) return; if (state.draft.type === 'markdown') state.draft.markdown = $('markdownEditor').value; else state.draft.html = sanitizeHTML($('richEditor').innerHTML); }
   async function saveDraft() {
@@ -257,21 +321,11 @@
   async function closeEditor() { if (!state.draft) return; clearTimeout(saveTimer); await saveDraft(); state.draft = null; $('editorOverlay').hidden = true; document.body.style.overflow = ''; selectionRange = null; renderBoard(); }
   function changeEditorMode(mode) {
     if (!state.draft || mode === state.editorMode) return;
+    const editableMode = state.draft.type === 'markdown' ? 'markdown' : 'visual';
+    if (mode !== editableMode && mode !== 'preview') return;
     getLatestEditorContent();
-    if (mode === 'markdown' && state.draft.type !== 'markdown') {
-      if (/\bcolor\s*:|\bbackground-color\s*:/i.test(state.draft.html || '') && !confirm('Markdown does not preserve custom text colors. Switch this note to Markdown source?')) return;
-      state.draft.markdown = htmlToMarkdown(state.draft.html || ''); state.draft.type = 'markdown'; $('markdownEditor').value = state.draft.markdown; toast('Switched to editable Markdown source'); queueSave();
-    }
-    // Switch back to the visual editor without a browser confirmation popup.
-    // Both the edited source and its rendered HTML are kept in the draft.
-    if (mode === 'visual' && state.draft.type === 'markdown') {
-      state.draft.markdown = $('markdownEditor').value;
-      state.draft.html = markdownToHTML(state.draft.markdown);
-      state.draft.type = 'rich';
-      $('richEditor').innerHTML = state.draft.html;
-      queueSave();
-    }
     displayEditorMode(mode);
+    // Switching to Preview or back is display-only. No Markdown conversion.
   }
   function saveSelection() { const sel = window.getSelection(); if (sel && sel.rangeCount && $('richEditor').contains(sel.anchorNode)) selectionRange = sel.getRangeAt(0).cloneRange(); }
   function restoreSelection() { if (selectionRange) { const sel = window.getSelection(); sel.removeAllRanges(); try { sel.addRange(selectionRange); } catch (e) { $('richEditor').focus(); } } else $('richEditor').focus(); }
@@ -280,6 +334,7 @@
   function richAction(action) {
     switch (action) {
       case 'h1': case 'h2': case 'h3': execRich('formatBlock', action); break;
+      case 'normal': execRich('formatBlock', 'p'); break;
       case 'bold': execRich('bold'); break; case 'italic': execRich('italic'); break; case 'underline': execRich('underline'); break; case 'strike': execRich('strikeThrough'); break;
       case 'bullets': execRich('insertUnorderedList'); break; case 'numbers': execRich('insertOrderedList'); break;
       case 'quote': execRich('formatBlock', 'blockquote'); break;
@@ -311,87 +366,94 @@
     for (const file of files) { if (!/\.(md|markdown|txt)$/i.test(file.name) && file.type !== 'text/markdown') continue; try { const source = await file.text(); const first = source.match(/^\s*#\s+(.+)$/m); const title = (first ? first[1].trim() : file.name.replace(/\.(md|markdown|txt)$/i, '')) || 'Imported note'; const n = { ...blankNote(), title, type: 'markdown', markdown: source, color: 'ocean', width: 6, tags: ['Imported'], createdAt: Date.now(), updatedAt: Date.now() }; state.notes.push(n); if (await saveSingle(n)) added++; } catch (e) { console.error(e); toast('Could not import ' + file.name); } }
     state.filter = 'all'; state.tag = null; state.search = ''; $('searchInput').value = ''; renderBoard(); toast(added + ' Markdown ' + (added === 1 ? 'note' : 'notes') + ' imported');
   }
-
   async function exportBackup() {
-    if (!database) {
-      toast('Wait for your notes to finish loading.');
-      return false;
-    }
-
+    if (!database) { toast('Wait for your notes to finish loading.'); return false; }
     try {
-      // Save any currently open note first.
-      if (state.draft) {
-        clearTimeout(saveTimer);
-        await saveDraft();
-      }
-
-      // Read notes directly from IndexedDB.
+      // Read the saved data directly from IndexedDB to avoid an incomplete backup.
+      if (state.draft) { clearTimeout(saveTimer); await saveDraft(); }
       const [notes, savedSettings] = await Promise.all([
-        dbReq('notes', 'getAll'),
-        dbReq('settings', 'get', 'main')
+        dbReq('notes', 'getAll'), dbReq('settings', 'get', 'main')
       ]);
-
       const out = {
-        format: 'jotboard-backup',
-        version: 1,
+        format: 'jotboard-backup', version: 1,
         exportedAt: new Date().toISOString(),
-        notes,
-        settings: savedSettings || state.settings
+        notes, settings: savedSettings || state.settings
       };
-
-      const filename =
-        'jotboard-backup-' +
-        new Date().toISOString().slice(0, 10) +
-        '.json';
-
-      downloadText(
-        filename,
-        JSON.stringify(out, null, 2),
-        'application/json;charset=utf-8'
-      );
-
+      const filename = 'jotboard-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+      downloadText(filename, JSON.stringify(out, null, 2), 'application/json;charset=utf-8');
       toast('JSON backup downloaded (' + notes.length + ' notes)');
       return true;
-
     } catch (e) {
       console.error('JSON backup failed', e);
       toast('Could not download JSON backup: ' + e.message);
       return false;
     }
   }
-
   function showBackupInfo(isOpen) {
     $('backupInfoPopover').hidden = !isOpen;
-
-    $('backupInfoButton').setAttribute(
-      'aria-expanded',
-      String(isOpen)
-    );
+    $('backupInfoButton').setAttribute('aria-expanded', String(isOpen));
   }
-
   async function restoreBackup(file) {
     try {
       const raw = await file.text(); const data = JSON.parse(raw); if (data?.format !== 'jotboard-backup' || !Array.isArray(data.notes)) throw new Error('Not a Jotboard backup'); if (data.notes.length > 10000) throw new Error('Backup contains too many notes');
       if (!confirm('Restore this backup? This REPLACES all current notes in this browser. Export your existing notes first if needed.')) return;
       const restored = data.notes.map((n, i) => ({ id: typeof n.id === 'string' ? n.id : id(), title: String(n.title || '').slice(0, 180), type: n.type === 'markdown' ? 'markdown' : 'rich', html: sanitizeHTML(String(n.html || '')), markdown: String(n.markdown || ''), color: palette(n.color).id, width: COLUMNS.includes(Number(n.width)) ? Number(n.width) : 4, pinned: !!n.pinned, tags: Array.isArray(n.tags) ? n.tags.filter(t => typeof t === 'string').map(t => t.slice(0, 65)).slice(0, 12) : [], archived: !!n.archived, deleted: !!n.deleted, createdAt: Number(n.createdAt) || Date.now(), updatedAt: Number(n.updatedAt) || Date.now(), order: Number.isFinite(n.order) ? n.order : i, backgroundImage: safeImgUrl(n.backgroundImage), editorWidth: Number(n.editorWidth) || 800 }));
       await dbReq('notes', 'clear'); for (const n of restored) await putNote(n); state.notes = restored;
-      if (data.settings) { state.settings = { ...defaultSettings, ...data.settings, id: 'main', theme: data.settings.theme === 'light' ? 'light' : 'dark', sort: ['manual', 'recent', 'oldest', 'title'].includes(data.settings.sort) ? data.settings.sort : 'manual', view: data.settings.view === 'list' ? 'list' : 'grid', wallpaper: safeImgUrl(data.settings.wallpaper) }; await persistSettings(); useSettings(); }
+      if (data.settings) { state.settings = { ...defaultSettings, ...data.settings, id: 'main', theme: data.settings.theme === 'light' ? 'light' : 'dark', sort: ['manual', 'recent', 'oldest', 'title'].includes(data.settings.sort) ? data.settings.sort : 'manual', view: ['grid', 'custom', 'list'].includes(data.settings.view) ? data.settings.view : 'grid', wallpaper: safeImgUrl(data.settings.wallpaper) }; await persistSettings(); useSettings(); }
       state.filter = 'all'; state.tag = null; state.search = ''; $('searchInput').value = ''; renderBoard(); closeSettings(); toast('Backup restored: ' + restored.length + ' notes');
     } catch (e) { console.error(e); toast('Could not restore backup: ' + e.message); }
   }
   function showSettings() { $('settingsOverlay').hidden = false; document.body.style.overflow = 'hidden'; }
   function closeSettings() { $('settingsOverlay').hidden = true; if ($('editorOverlay').hidden) document.body.style.overflow = ''; }
   function setFilter(filter, tag = null) { state.filter = filter; state.tag = tag; state.openMenu = null; renderBoard(); $('sidebar').classList.remove('is-open'); $('mobileScrim').hidden = true; }
+  function hideNoteTypeMenu() {
+    $('noteTypeMenu').hidden = true;
+    $('quickCompose').setAttribute('aria-expanded', 'false');
+    $('newSidebar').setAttribute('aria-expanded', 'false');
+  }
+  function toggleNoteTypeMenu(force) {
+    if (state.filter === 'trash') setFilter('all');
+    const willShow = typeof force === 'boolean' ? force : $('noteTypeMenu').hidden;
+    $('noteTypeMenu').hidden = !willShow;
+    $('quickCompose').setAttribute('aria-expanded', String(willShow));
+    $('newSidebar').setAttribute('aria-expanded', String(willShow));
+    if (willShow) $('noteTypeMenu').querySelector('[data-new-type="rich"]').focus();
+  }
   function eventListeners() {
     injectIcons();
-    $('newSidebar').addEventListener('click', () => openEditor()); $('quickCompose').addEventListener('click', () => openEditor());
+    $('newSidebar').addEventListener('click', () => {
+      $('sidebar').classList.remove('is-open');
+      $('mobileScrim').hidden = true;
+      toggleNoteTypeMenu(true);
+    });
+    $('quickCompose').addEventListener('click', () => toggleNoteTypeMenu());
+    $('noteTypeMenu').addEventListener('click', e => {
+      const choice = e.target.closest('[data-new-type]');
+      if (!choice) return;
+      openEditor(null, choice.dataset.newType);
+    });
+    document.addEventListener('click', e => {
+      if (!$('noteTypeMenu').hidden && !e.target.closest('#composeWrap') && !e.target.closest('#newSidebar')) hideNoteTypeMenu();
+    });
     document.querySelectorAll('.side-link[data-filter]').forEach(btn => btn.addEventListener('click', () => setFilter(btn.dataset.filter)));
     $('tagsNav').addEventListener('click', e => { const b = e.target.closest('[data-tag]'); if (b) setFilter('all', b.dataset.tag); });
     $('searchInput').addEventListener('input', e => { state.search = e.target.value; renderBoard(); });
     $('sortSelect').addEventListener('change', async e => { state.settings.sort = e.target.value; await persistSettings(); renderBoard(); });
-    $('gridView').addEventListener('click', async () => { state.settings.view = 'grid'; await persistSettings(); renderBoard(); });
-    $('listView').addEventListener('click', async () => { state.settings.view = 'list'; await persistSettings(); renderBoard(); });
+    for (const [buttonId, view] of [['gridView','grid'],['customView','custom'],['listView','list']]) {
+      $(buttonId).addEventListener('click', async () => {
+        state.settings.view = view;
+        await persistSettings();
+        renderBoard();
+      });
+    }
     $('themeToggle').addEventListener('click', async () => { state.settings.theme = state.settings.theme === 'dark' ? 'light' : 'dark'; useSettings(); await persistSettings(); });
+    $('backupInfoButton').addEventListener('click', () => showBackupInfo($('backupInfoPopover').hidden));
+    $('downloadJsonBackup').addEventListener('click', async () => {
+      if (await exportBackup()) showBackupInfo(false);
+    });
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#backupInfoWrap')) showBackupInfo(false);
+    });
     $('importMarkdownTop').addEventListener('click', () => $('markdownFileInput').click());
     $('mobileMenu').addEventListener('click', () => { $('sidebar').classList.toggle('is-open'); $('mobileScrim').hidden = !$('sidebar').classList.contains('is-open'); });
     $('mobileScrim').addEventListener('click', () => { $('sidebar').classList.remove('is-open'); $('mobileScrim').hidden = true; });
@@ -449,46 +511,9 @@
       const mod = e.ctrlKey || e.metaKey; const target = e.target; const typing = target.matches('input,textarea,[contenteditable=true],select') || !!target.closest('[contenteditable=true]');
       if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); if (!$('editorOverlay').hidden) closeEditor(); $('searchInput').focus(); $('searchInput').select(); return; }
       if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); if (state.draft) { clearTimeout(saveTimer); saveDraft(); toast('Note saved'); } else exportBackup(); return; }
-
-      if (e.key === 'Escape') {
-        if (!$('backupInfoPopover').hidden) {
-          showBackupInfo(false);
-          $('backupInfoButton').focus();
-          return;
-        }
-
-        if (!$('settingsOverlay').hidden) {
-          closeSettings();
-        } else if (!$('editorOverlay').hidden) {
-          closeEditor();
-        } else if (state.openMenu) {
-          state.openMenu = null;
-          renderBoard();
-        }
-
-        return;
-      }
-
-      if (!typing && !mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n' && $('editorOverlay').hidden && $('settingsOverlay').hidden) { e.preventDefault(); openEditor(); }
+      if (e.key === 'Escape') { if (!$('noteTypeMenu').hidden) { hideNoteTypeMenu(); $('quickCompose').focus(); return; } if (!$('backupInfoPopover').hidden) { showBackupInfo(false); $('backupInfoButton').focus(); return; } if (!$('settingsOverlay').hidden) closeSettings(); else if (!$('editorOverlay').hidden) closeEditor(); else if (state.openMenu) { state.openMenu = null; renderBoard(); } return; }
+      if (!typing && !mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n' && $('editorOverlay').hidden && $('settingsOverlay').hidden) { e.preventDefault(); toggleNoteTypeMenu(true); }
     });
-
-    $('backupInfoButton').addEventListener('click', () => {
-      showBackupInfo($('backupInfoPopover').hidden);
-    });
-
-    $('downloadJsonBackup').addEventListener('click', async () => {
-      if (await exportBackup()) {
-        showBackupInfo(false);
-      }
-    });
-
-    // Close popup when clicking outside.
-    document.addEventListener('click', e => {
-      if (!e.target.closest('#backupInfoWrap')) {
-        showBackupInfo(false);
-      }
-    });
-
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && state.draft) { clearTimeout(saveTimer); saveDraft(); } });
   }
   async function initialize() {
@@ -497,10 +522,8 @@
       database = await openDatabase(); let [notes, settings] = await Promise.all([dbReq('notes', 'getAll'), dbReq('settings', 'get', 'main')]);
       if (!settings) { settings = { ...defaultSettings }; await dbReq('settings', 'put', settings); }
       state.settings = { ...defaultSettings, ...settings }; state.notes = notes;
-
       $('downloadJsonBackup').disabled = false;
       $('exportBackup').disabled = false;
-
     } catch (e) {
       console.error('Could not open Jotboard storage', e);
       $('notesGrid').innerHTML = '<p style="color:#ffa9a9">Could not open saved notes. Please check browser storage.</p>';

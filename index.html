@@ -19,7 +19,7 @@
         <div class="brand-type">jotboard<span class="brand-dot">.</span></div>
       </div>
       <div class="sidebar-main">
-        <button type="button" class="sidebar-new" id="newSidebar"><span data-icon="plus"></span> New note <span class="new-hint">N</span></button>
+        <button type="button" class="sidebar-new" id="newSidebar" aria-haspopup="true" aria-expanded="false" aria-controls="noteTypeMenu"><span data-icon="plus"></span> New note <span class="new-hint">N</span></button>
         <nav class="side-nav" aria-label="Main navigation">
           <button type="button" class="side-link is-active" data-filter="all"><span data-icon="layout-grid"></span><span>All notes</span><span id="countAll" class="nav-count"></span></button>
           <button type="button" class="side-link" data-filter="pinned"><span data-icon="pin"></span><span>Pinned</span></button>
@@ -67,8 +67,14 @@
       </header>
 
       <main class="main-content" id="mainContent">
-        <button type="button" class="quick-compose" id="quickCompose"><span class="compose-plus" data-icon="plus"></span><span>Take a note...</span></button>
-        <div class="board-topline"><div class="board-title"><h2 id="boardHeading">Your notes</h2><span id="resultsCount" class="result-count"></span></div><div class="board-tools"><label class="sort-box"><span data-icon="arrow-down-up"></span><select id="sortSelect" aria-label="Sort notes"><option value="manual">Custom order</option><option value="recent">Recently edited</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select></label><button type="button" class="icon-btn view-button is-active" id="gridView" title="Grid view" aria-label="Grid view"><span data-icon="layout-grid"></span></button><button type="button" class="icon-btn view-button" id="listView" title="List view" aria-label="List view"><span data-icon="rows"></span></button></div></div>
+        <div class="compose-wrap" id="composeWrap">
+          <button type="button" class="quick-compose" id="quickCompose" aria-haspopup="true" aria-expanded="false" aria-controls="noteTypeMenu"><span class="compose-plus" data-icon="plus"></span><span>Take a note...</span><span class="compose-caret" data-icon="chevron-right"></span></button>
+          <div class="note-type-menu" id="noteTypeMenu" role="group" aria-label="Choose note type" hidden>
+            <button type="button" class="note-type-option" data-new-type="rich"><span class="type-icon" data-icon="notebook"></span><span>Rich Text Note</span><span class="type-arrow" data-icon="chevron-right"></span></button>
+            <button type="button" class="note-type-option" data-new-type="markdown"><span class="type-icon" data-icon="file-code"></span><span>Markdown Note</span><span class="type-arrow" data-icon="chevron-right"></span></button>
+          </div>
+        </div>
+        <div class="board-topline"><div class="board-title"><h2 id="boardHeading">Your notes</h2><span id="resultsCount" class="result-count"></span></div><div class="board-tools"><label class="sort-box"><span data-icon="arrow-down-up"></span><select id="sortSelect" aria-label="Sort notes"><option value="manual">Custom order</option><option value="recent">Recently edited</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select></label><button type="button" class="icon-btn view-button is-active" id="gridView" title="Compact grid" aria-label="Compact grid" aria-pressed="true"><span data-icon="layout-grid"></span></button><button type="button" class="icon-btn view-button" id="customView" title="Flexible grid (custom widths)" aria-label="Flexible grid" aria-pressed="false"><span data-icon="move-horizontal"></span></button><button type="button" class="icon-btn view-button" id="listView" title="List view" aria-label="List view" aria-pressed="false"><span data-icon="rows"></span></button></div></div>
         <section class="notes-grid" id="notesGrid" aria-label="Notes"></section>
         <div class="no-notes" id="emptyState" hidden><div class="empty-illustration"><span data-icon="notebook"></span></div><p id="emptyHeading">No notes yet</p></div>
       </main>
@@ -77,10 +83,10 @@
 
   <div class="modal-backdrop" id="editorOverlay" hidden>
     <section class="editor-modal" id="editorModal" role="dialog" aria-modal="true" aria-label="Note editor">
-      <div class="editor-top"><div class="editor-heading"><span class="editing-pulse"></span><span id="editorStatus">Editing note</span></div><div class="editor-top-actions"><label class="editor-width-picker" title="Editor width"><span data-icon="move-horizontal"></span><select id="editorWidthSelect" aria-label="Editor width"><option value="600">Narrow</option><option value="800" selected>Medium</option><option value="1040">Wide</option></select></label><button type="button" class="icon-btn" id="editorPin" title="Pin note" aria-label="Pin note"><span data-icon="pin"></span></button><button type="button" class="icon-btn" id="editorClose" aria-label="Close editor"><span data-icon="x"></span></button></div></div>
+      <div class="editor-top"><div class="editor-heading"><span class="editing-pulse"></span><span id="editorStatus">Editing note</span><span class="note-format-badge" id="editorKind" aria-label="Note format"></span></div><div class="editor-top-actions"><label class="editor-width-picker" title="Editor width"><span data-icon="move-horizontal"></span><select id="editorWidthSelect" aria-label="Editor width"><option value="600">Narrow</option><option value="800" selected>Medium</option><option value="1040">Wide</option></select></label><button type="button" class="icon-btn" id="editorPin" title="Pin note" aria-label="Pin note"><span data-icon="pin"></span></button><button type="button" class="icon-btn" id="editorClose" aria-label="Close editor"><span data-icon="x"></span></button></div></div>
       <div class="editor-scroll">
         <input id="editorTitle" class="editor-title" type="text" placeholder="Title" maxlength="180" autocomplete="off" />
-        <div class="editor-tabs" role="tablist" aria-label="Editor modes"><button type="button" data-mode="visual" class="editor-tab is-active">Visual editor</button><button type="button" data-mode="markdown" class="editor-tab">Markdown source</button><button type="button" data-mode="preview" class="editor-tab">Preview</button></div>
+        <div class="editor-tabs" role="tablist" aria-label="Editing views"><button type="button" data-mode="visual" class="editor-tab is-active">Visual editor</button><button type="button" data-mode="markdown" class="editor-tab">Markdown source</button><button type="button" data-mode="preview" class="editor-tab">Preview</button></div>
         <div id="editorToolbar" class="editor-toolbar" role="toolbar" aria-label="Formatting tools">
           <select id="fontSelect" class="font-picker" title="Font family" aria-label="Font family">
             <option value="">Font</option>
@@ -90,7 +96,7 @@
             <option value="Trebuchet MS">Trebuchet MS</option>
             <option value="Courier New">Courier New</option>
           </select><span class="toolbar-div"></span>
-          <button type="button" data-format="h1" title="Heading 1">H1</button><button type="button" data-format="h2" title="Heading 2">H2</button><button type="button" data-format="h3" title="Heading 3">H3</button>
+          <button type="button" data-format="normal" title="Normal text" aria-label="Normal text">Aa</button><button type="button" data-format="h1" title="Heading 1">H1</button><button type="button" data-format="h2" title="Heading 2">H2</button><button type="button" data-format="h3" title="Heading 3">H3</button>
           <span class="toolbar-div"></span><button type="button" data-format="bold" title="Bold (Ctrl+B)"><strong>B</strong></button><button type="button" data-format="italic" title="Italic (Ctrl+I)"><em>I</em></button><button type="button" data-format="underline" title="Underline (Ctrl+U)"><u>U</u></button><button type="button" data-format="strike" title="Strikethrough"><s>S</s></button>
           <span class="toolbar-div"></span><label class="format-color" title="Text color"><span data-icon="palette"></span><input id="textColorInput" type="color" value="#ffc977" aria-label="Text color" /></label><label class="format-color" title="Text highlight"><span data-icon="highlighter"></span><input id="highlightColorInput" type="color" value="#ffd66c" aria-label="Highlight color" /></label>
           <span class="toolbar-div"></span><button type="button" data-format="bullets" title="Bullet list"><span data-icon="list"></span></button><button type="button" data-format="numbers" title="Numbered list"><span data-icon="list-ordered"></span></button><button type="button" data-format="checklist" title="Checklist"><span data-icon="list-checks"></span></button><button type="button" data-format="table" title="Insert table"><span data-icon="table"></span></button><button type="button" data-format="link" title="Insert link"><span data-icon="link"></span></button><button type="button" data-format="quote" title="Blockquote"><span data-icon="quote"></span></button><button type="button" data-format="clear" title="Clear formatting"><span data-icon="remove-formatting"></span></button>
