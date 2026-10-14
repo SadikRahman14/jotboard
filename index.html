@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#15171d" />
   <meta name="description" content="Jotboard is a minimal, local-first notes application." />
-  <title>Jotboard — Notes</title>
+  <title>Jotboard</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./styles.css" />
   <script src="./vendor/marked.js"></script>
@@ -19,7 +19,6 @@
         <div class="brand-type">jotboard<span class="brand-dot">.</span></div>
       </div>
       <div class="sidebar-main">
-        <button type="button" class="sidebar-new" id="newSidebar" aria-haspopup="true" aria-expanded="false" aria-controls="noteTypeMenu"><span data-icon="plus"></span> New note <span class="new-hint">N</span></button>
         <nav class="side-nav" aria-label="Main navigation">
           <button type="button" class="side-link is-active" data-filter="all"><span data-icon="layout-grid"></span><span>All notes</span><span id="countAll" class="nav-count"></span></button>
           <button type="button" class="side-link" data-filter="pinned"><span data-icon="pin"></span><span>Pinned</span></button>
@@ -38,13 +37,16 @@
       <header class="topbar">
         <div class="topbar-left">
           <button type="button" id="mobileMenu" class="icon-btn mobile-menu" aria-label="Toggle sidebar"><span data-icon="menu"></span></button>
+          <button type="button" id="desktopSidebarToggle" class="icon-btn desktop-sidebar-toggle" aria-label="Collapse sidebar" title="Collapse sidebar"><span data-icon="chevron-right"></span></button>
           <span class="top-crumb" id="currentSectionName">All notes</span>
         </div>
-        <label class="search-input-wrap topbar-search" aria-label="Search notes">
+        <div class="search-input-wrap topbar-search">
           <span data-icon="search"></span>
-          <input id="searchInput" type="search" placeholder="Search notes" autocomplete="off" />
-        </label>
+          <input id="searchInput" type="search" placeholder="Search notes" autocomplete="off" aria-label="Search notes" />
+          <button type="button" class="search-command-trigger" id="commandPaletteButton" title="Commands (Ctrl+K)" aria-label="Open commands"><span data-icon="menu"></span></button>
+        </div>
         <div class="topbar-right">
+          <button type="button" class="backup-reminder" id="backupReminder" title="Download a JSON backup" hidden><span data-icon="clock"></span><span>Back up</span></button>
           <div class="backup-info-wrap" id="backupInfoWrap">
             <button type="button" class="icon-btn backup-info-button" id="backupInfoButton"
                     aria-label="Where are my notes saved?" aria-expanded="false"
@@ -54,6 +56,7 @@
               <strong>Local-only notes</strong>
               <p>Your notes are saved in <b>this browser's database (IndexedDB)</b>,
                  not in the cloud. Clearing browser data may erase them.</p>
+              <small id="lastBackupInfo" class="last-backup-info"></small>
               <button type="button" class="backup-download-button"
                       id="downloadJsonBackup" disabled>
                 <span data-icon="download"></span> Download JSON backup
@@ -68,13 +71,32 @@
 
       <main class="main-content" id="mainContent">
         <div class="compose-wrap" id="composeWrap">
-          <button type="button" class="quick-compose" id="quickCompose" aria-haspopup="true" aria-expanded="false" aria-controls="noteTypeMenu"><span class="compose-plus" data-icon="plus"></span><span>Take a note...</span><span class="compose-caret" data-icon="chevron-right"></span></button>
-          <div class="note-type-menu" id="noteTypeMenu" role="group" aria-label="Choose note type" hidden>
-            <button type="button" class="note-type-option" data-new-type="rich"><span class="type-icon" data-icon="notebook"></span><span>Rich Text Note</span><span class="type-arrow" data-icon="chevron-right"></span></button>
-            <button type="button" class="note-type-option" data-new-type="markdown"><span class="type-icon" data-icon="file-code"></span><span>Markdown Note</span><span class="type-arrow" data-icon="chevron-right"></span></button>
+          <div class="quick-compose-split" id="quickCompose">
+            <button type="button" class="quick-compose-half" id="quickComposeRich" aria-label="New note">
+              <span class="compose-plus" data-icon="plus"></span>
+              <span>Note</span>
+            </button>
+            <button type="button" class="quick-compose-half" id="quickComposeMarkdown" aria-label="New Markdown note">
+              <span class="compose-plus" data-icon="file-code"></span>
+              <span>Markdown</span>
+            </button>
           </div>
         </div>
-        <div class="board-topline"><div class="board-title"><h2 id="boardHeading">Your notes</h2><span id="resultsCount" class="result-count"></span></div><div class="board-tools"><label class="sort-box"><span data-icon="arrow-down-up"></span><select id="sortSelect" aria-label="Sort notes"><option value="manual">Custom order</option><option value="recent">Recently edited</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select></label><button type="button" class="icon-btn view-button is-active" id="gridView" title="Compact grid" aria-label="Compact grid" aria-pressed="true"><span data-icon="layout-grid"></span></button><button type="button" class="icon-btn view-button" id="customView" title="Flexible grid (custom widths)" aria-label="Flexible grid" aria-pressed="false"><span data-icon="move-horizontal"></span></button><button type="button" class="icon-btn view-button" id="listView" title="List view" aria-label="List view" aria-pressed="false"><span data-icon="rows"></span></button></div></div>
+        <div class="board-topline">
+          <div class="board-title"><h2 id="boardHeading">Notes</h2><span id="resultsCount" class="result-count"></span></div>
+          <div class="board-tools">
+            <div class="search-filters" id="searchFilters">
+              <select id="typeFilter" aria-label="Filter by note type" title="Filter by note type"><option value="all">All types</option><option value="rich">Rich text</option><option value="markdown">Markdown</option></select>
+              <select id="labelFilter" aria-label="Filter by label" title="Filter by label"><option value="">All labels</option></select>
+            </div>
+            <label class="sort-box"><span data-icon="arrow-down-up"></span><select id="sortSelect" aria-label="Sort notes"><option value="manual">Custom order</option><option value="recent">Recently edited</option><option value="oldest">Oldest first</option><option value="title">Title A–Z</option></select></label>
+            <div class="view-switch" role="group" aria-label="Note layout">
+              <button type="button" class="icon-btn view-button is-active" id="gridView" title="Compact grid" aria-label="Compact grid" aria-pressed="true"><span data-icon="layout-grid"></span></button>
+              <button type="button" class="icon-btn view-button" id="customView" title="Flexible grid (custom widths)" aria-label="Flexible grid" aria-pressed="false"><span data-icon="move-horizontal"></span></button>
+              <button type="button" class="icon-btn view-button" id="listView" title="List view" aria-label="List view" aria-pressed="false"><span data-icon="rows"></span></button>
+            </div>
+          </div>
+        </div>
         <section class="notes-grid" id="notesGrid" aria-label="Notes"></section>
         <div class="no-notes" id="emptyState" hidden><div class="empty-illustration"><span data-icon="notebook"></span></div><p id="emptyHeading">No notes yet</p></div>
       </main>
@@ -104,11 +126,39 @@
         <div class="editor-body-frame" id="editorBodyFrame"><div id="richEditor" class="rich-editor note-content" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Take a note..."></div><textarea id="markdownEditor" class="markdown-editor" spellcheck="false" aria-label="Markdown source" placeholder="# Your next great idea" hidden></textarea><div id="previewEditor" class="markdown-preview note-content" hidden></div></div>
         <div class="editor-customize"><div class="customize-top"><div class="customize-label"><span data-icon="palette"></span><strong>Background</strong></div><button type="button" id="backgroundUploadBtn" class="icon-btn" title="Choose background image" aria-label="Choose background image"><span data-icon="image"></span></button></div><div class="background-colors" id="backgroundColors"></div><div id="backgroundImageStatus" class="bg-image-status" hidden><span data-icon="image"></span> Background image <button id="removeNoteBackground" type="button">Remove</button></div><div class="editor-meta-fields"><label class="field-label">LABELS <input type="text" id="editorTags" placeholder="Add labels (comma separated)" maxlength="240" /></label></div></div>
       </div>
-      <div class="editor-footer"><div class="save-status"><span data-icon="check-circle"></span><span id="saveStatus">Saved</span></div><div class="editor-footer-actions"><button class="subtle-btn" type="button" id="exportCurrentMd"><span data-icon="download"></span> .md</button><button class="subtle-btn danger-quiet" type="button" id="deleteCurrent"><span data-icon="trash"></span></button><button class="primary-btn" type="button" id="editorDone">Done <span data-icon="check"></span></button></div></div>
+      <div class="editor-footer"><div class="save-status" id="saveIndicator" data-state="saved"><span data-icon="check-circle"></span><span id="saveStatus">Saved locally</span><button type="button" id="retrySave" class="retry-save" hidden>Retry</button></div><div class="editor-footer-actions"><button class="subtle-btn" type="button" id="exportCurrentMd"><span data-icon="download"></span> .md</button><button class="subtle-btn danger-quiet" type="button" id="deleteCurrent"><span data-icon="trash"></span></button><button class="primary-btn" type="button" id="editorDone">Done <span data-icon="check"></span></button></div></div>
     </section>
   </div>
 
-  <div class="modal-backdrop" id="settingsOverlay" hidden><section class="settings-modal" role="dialog" aria-modal="true" aria-label="Settings and backup"><div class="settings-header"><div><h2>Settings</h2></div><button type="button" class="icon-btn" id="settingsClose" aria-label="Close settings"><span data-icon="x"></span></button></div><div class="settings-section"><h3>Wallpaper</h3><div class="settings-actions"><button type="button" class="outline-btn" id="chooseWallpaper"><span data-icon="image-plus"></span> Choose image</button><button type="button" class="outline-btn" id="removeWallpaper"><span data-icon="x"></span> Remove image</button></div></div><div class="settings-section"><h3>Backup & import</h3><div class="settings-actions"><button type="button" class="outline-btn" id="exportBackup" disabled><span data-icon="download"></span> Export backup</button><button type="button" class="outline-btn" id="importBackup"><span data-icon="upload"></span> Restore JSON</button><button type="button" class="outline-btn" id="settingsImportMd"><span data-icon="file-code"></span> Import .md</button></div></div><div class="settings-note"><span data-icon="shield-check"></span><div><strong>Local storage</strong><p>Notes stay in this browser. Clearing site data deletes them, so export backups regularly.</p></div></div><div class="shortcuts"><h3>Keyboard shortcuts</h3><div><span>New note</span><kbd>N</kbd></div><div><span>Search</span><kbd>Ctrl / ⌘ + K</kbd></div><div><span>Save note</span><kbd>Ctrl / ⌘ + S</kbd></div><div><span>Close editor</span><kbd>Esc</kbd></div></div></section></div>
+  <div class="command-backdrop" id="commandOverlay" hidden>
+    <section class="command-panel" role="dialog" aria-modal="true" aria-label="Search notes and commands">
+      <div class="command-search"><span data-icon="search"></span><input id="commandInput" type="search" placeholder="Search notes or commands" aria-label="Search notes and commands" autocomplete="off" /><kbd>Esc</kbd></div>
+      <div class="command-results" id="commandResults" role="listbox" aria-label="Commands and notes"></div>
+      <div class="command-footer"><span><kbd>↑↓</kbd> Navigate</span><span><kbd>Enter</kbd> Open</span></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="previewOverlay" hidden>
+    <section class="preview-modal" role="dialog" aria-modal="true" aria-label="Quick preview">
+      <div class="preview-top">
+        <div class="preview-top-copy">
+          <span class="preview-kicker">Quick preview</span>
+          <h2 id="previewTitle">Untitled note</h2>
+          <div class="preview-meta-line"><span id="previewKind" class="note-format-badge"></span><span id="previewDate"></span></div>
+        </div>
+        <div class="preview-actions">
+          <button type="button" class="subtle-btn" id="previewEdit"><span data-icon="maximize"></span> Open</button>
+          <button type="button" class="icon-btn" id="previewClose" aria-label="Close preview"><span data-icon="x"></span></button>
+        </div>
+      </div>
+      <div class="preview-scroll">
+        <div id="previewTags" class="preview-tags"></div>
+        <div id="previewContent" class="preview-content note-content"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="settingsOverlay" hidden><section class="settings-modal" role="dialog" aria-modal="true" aria-label="Settings and backup"><div class="settings-header"><div><h2>Settings</h2></div><button type="button" class="icon-btn" id="settingsClose" aria-label="Close settings"><span data-icon="x"></span></button></div><div class="settings-section"><h3>Wallpaper</h3><div class="settings-actions"><button type="button" class="outline-btn" id="chooseWallpaper"><span data-icon="image-plus"></span> Choose image</button><button type="button" class="outline-btn" id="removeWallpaper"><span data-icon="x"></span> Remove image</button></div></div><div class="settings-section"><h3>Backup & import</h3><div class="settings-actions"><button type="button" class="outline-btn" id="exportBackup" disabled><span data-icon="download"></span> Export backup</button><button type="button" class="outline-btn" id="importBackup"><span data-icon="upload"></span> Restore JSON</button><button type="button" class="outline-btn" id="settingsImportMd"><span data-icon="file-code"></span> Import .md</button></div></div><div class="settings-note"><span data-icon="shield-check"></span><div><strong>Local storage</strong><p>Notes stay in this browser. Clearing site data deletes them, so export backups regularly.</p></div></div><div class="shortcuts"><h3>Keyboard shortcuts</h3><div><span>Rich text / Markdown</span><kbd>N / M</kbd></div><div><span>Commands</span><kbd>Ctrl / ⌘ + K</kbd></div><div><span>Search</span><kbd>Ctrl / ⌘ + K</kbd></div><div><span>Save note</span><kbd>Ctrl / ⌘ + S</kbd></div><div><span>Close editor</span><kbd>Esc</kbd></div></div></section></div>
 
   <input type="file" accept=".md,.markdown,text/markdown,text/plain" multiple id="markdownFileInput" hidden />
   <input type="file" accept=".json,application/json" id="jsonFileInput" hidden />
