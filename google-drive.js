@@ -11,6 +11,8 @@
   const PAIR_KEY = 'jotboard_drive_last_backup_v1';
   const WELCOME_DISMISS_KEY = 'jotboard_drive_welcome_dismissed_v1';
   const ACCOUNT_KEY = 'jotboard_drive_account_history_v1';
+  const DIRTY_KEY = 'jotboard_drive_pending_v1';
+  const DISABLED_KEY = 'jotboard_drive_disabled_v1';
 
   let callbacks;
   let accessToken = '';
@@ -22,12 +24,16 @@
   let busy = false;
   let pending = false;
   let idleTimer = null;
+  let expiryTimer = null;
   let revisions = 0;
+  let hasPendingChanges = false;
   let status = 'disconnected';
   let statusText = 'Not connected';
   let hasLocalNotes = true; // Hide restore nudges until storage is checked.
   let accountEmail = '';
   let accountHistory = readAccountHistory();
+  try { hasPendingChanges = localStorage.getItem(DIRTY_KEY) === '1'; }
+  catch (_) { /* Status storage is optional. */ }
 
   const element = id => document.getElementById(id);
   const configured = () => {
@@ -48,6 +54,30 @@
         id: remoteFile.id, version: String(remoteFile.version)
       }));
     } catch (_) { /* Browser storage may be restricted. */ }
+  }
+
+  function wantsDriveBackup() {
+    try {
+      return localStorage.getItem(DISABLED_KEY) !== '1'
+        && (!!accountHistory?.email || !!lastConnectedBackup()?.id);
+    } catch (_) { return !!accountHistory?.email; }
+  }
+
+  function markPendingChanges() {
+    hasPendingChanges = true;
+    try { localStorage.setItem(DIRTY_KEY, '1'); } catch (_) { /* Best effort. */ }
+  }
+
+  function clearPendingChanges() {
+    hasPendingChanges = false;
+    try { localStorage.removeItem(DIRTY_KEY); } catch (_) { /* Best effort. */ }
+  }
+
+  function armExpiryTimer() {
+    clearTimeout(expiryTimer);
+    expiryTimer = setTimeout(() => {
+      if (authorized && Date.now() >= tokenExpiresAt - 10000) pauseForReconnection();
+    }, Math.max(0, tokenExpiresAt - Date.now() - 10000));
   }
 
   // Store only display history in this browser, never OAuth tokens.
@@ -180,9 +210,13 @@
   function pauseForReconnection() {
     accessToken = '';
     tokenExpiresAt = 0;
+    authorized = false;
     ready = false;
     clearTimer();
-    showStatus('expired', 'Reconnect to continue backups');
+    clearTimeout(expiryTimer);
+    showStatus('expired', hasPendingChanges
+      ? 'Local edits not backed up — reconnect Google Drive'
+      : 'Reconnect Google Drive to resume backups');
   }
 
   async function apiRequest(url, { method = 'GET', headers = {}, body, format = 'json' } = {}) {
@@ -391,6 +425,7 @@
     remoteSnapshot = backup;
     rememberBackup();
     recordDriveBackup();
+    clearPendingChanges();
     saveAccountHistory({ lastRestoredAt: Date.now() });
     ready = true;
     pending = false;
@@ -436,6 +471,7 @@
       ready = true;
       showStatus('ready', 'Connected • no backup yet');
       if (local.notes.length) await syncNow();
+      else clearPendingChanges();
       return;
     }
 
@@ -448,6 +484,7 @@
     if (dataMatches(local, remote)) {
       rememberBackup();
       recordDriveBackup();
+      clearPendingChanges();
       ready = true;
       showStatus('ready', 'Up to date on Google Drive');
       return;
@@ -515,7 +552,9 @@
         tokenExpiresAt = Date.now() + Math.max(30, Number(response.expires_in || 3600)) * 1000;
         authorized = true;
         ready = false;
+        try { localStorage.setItem(DISABLED_KEY, '0'); } catch (_) { /* Optional. */ }
         clearTimer();
+        armExpiryTimer();
         try { await onConnected(); }
         catch (error) {
           console.error('Google Drive connection failed', error);
@@ -525,7 +564,8 @@
       },
       error_callback: () => showStatus('disconnected', 'Google sign-in was closed')
     });
-    client.requestAccessToken({ prompt: 'consent' });
+    // Don't force repeated consent. Account switching still shows the chooser.
+    client.requestAccessToken({ prompt: authorized ? 'select_account' : '' });
   }
 
   async function syncNow({ force = false } = {}) {
@@ -538,12 +578,14 @@
     try {
       const snapshot = await callbacks.getSnapshot();
       if (!snapshot.notes.length && !remoteFile) {
+        clearPendingChanges();
         showStatus('ready', 'Connected • start writing to back up');
         return true;
       }
       if (!force && remoteSnapshot && dataMatches(snapshot, remoteSnapshot)) {
         rememberBackup();
         recordDriveBackup();
+        if (revisions === startRevision) clearPendingChanges();
         showStatus('ready', 'Up to date on Google Drive');
         return true;
       }
@@ -555,6 +597,7 @@
       remoteSnapshot = exported;
       rememberBackup();
       recordDriveBackup();
+      if (revisions === startRevision) clearPendingChanges();
       showStatus('ready', 'Backed up to Google Drive');
       return true;
     } catch (error) {
@@ -573,7 +616,6 @@
 
   function scheduleBackup() {
     if (!authorized || !ready) return;
-    revisions += 1;
     clearTimer();
     idleTimer = setTimeout(() => { syncNow(); }, AUTO_BACKUP_DELAY);
     showStatus('pending', 'Changes saved locally • backup in 15 seconds');
@@ -582,11 +624,20 @@
   function onLocalSaved() {
     hasLocalNotes = true;
     if (element('driveEmptyConnect')) element('driveEmptyConnect').hidden = true;
-    scheduleBackup();
+    // Persist a pending marker even if the OAuth token is no longer available.
+    if (!authorized && !wantsDriveBackup()) return;
+    revisions += 1;
+    markPendingChanges();
+    if (authorized && ready) scheduleBackup();
+    else if (status !== 'conflict' && status !== 'paused') {
+      showStatus('expired', 'Local edits not backed up — reconnect Google Drive');
+    }
   }
 
   function disconnect() {
     clearTimer();
+    clearTimeout(expiryTimer);
+    try { localStorage.setItem(DISABLED_KEY, '1'); } catch (_) { /* Optional. */ }
     authorized = false;
     ready = false;
     accessToken = '';
@@ -603,7 +654,8 @@
   function initialize(options) {
     callbacks = options;
     showStatus('disconnected', !configured() ? 'Google Drive setup required'
-      : accountHistory?.email ? 'Reconnect to resume Google Drive backups' : 'Not connected');
+      : wantsDriveBackup() && hasPendingChanges ? 'Local edits not backed up — reconnect Google Drive'
+      : accountHistory?.email && wantsDriveBackup() ? 'Reconnect to resume Google Drive backups' : 'Not connected');
     element('driveConnect')?.addEventListener('click', connect);
     element('driveEmptyConnect')?.addEventListener('click', () => {
       element('driveEmptyConnect').blur();
@@ -626,6 +678,13 @@
     });
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && !element('driveWelcomeOverlay')?.hidden) dismissWelcome();
+    });
+    // Best-effort flush when switching tabs or closing the browser; completion
+    // is not guaranteed if the page is terminated during the upload.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden' && hasPendingChanges && authorized && ready) {
+        syncNow().catch(error => console.warn('Drive flush interrupted', error));
+      }
     });
     // Jotboard passes callbacks only after IndexedDB has loaded successfully.
     setTimeout(offerRecovery, 450);
