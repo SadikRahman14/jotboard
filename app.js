@@ -1590,7 +1590,7 @@
     }
     function bindSettingsEvents() {
         byId('openSettings').addEventListener('click', showSettings);
-        byId('avatarSettings').addEventListener('click', showSettings);
+        byId('avatarSettings')?.addEventListener('click', showSettings);
         byId('settingsClose').addEventListener('click', closeSettings);
         byId('settingsOverlay').addEventListener('mousedown', e => {
             if (e.target === byId('settingsOverlay'))
