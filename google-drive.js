@@ -10,6 +10,7 @@
   const AUTO_BACKUP_DELAY = 15000;
   const PAIR_KEY = 'jotboard_drive_last_backup_v1';
   const WELCOME_DISMISS_KEY = 'jotboard_drive_welcome_dismissed_v1';
+  const ACCOUNT_KEY = 'jotboard_drive_account_history_v1';
 
   let callbacks;
   let accessToken = '';
@@ -25,6 +26,8 @@
   let status = 'disconnected';
   let statusText = 'Not connected';
   let hasLocalNotes = true; // Hide restore nudges until storage is checked.
+  let accountEmail = '';
+  let accountHistory = readAccountHistory();
 
   const element = id => document.getElementById(id);
   const configured = () => {
@@ -47,6 +50,94 @@
     } catch (_) { /* Browser storage may be restricted. */ }
   }
 
+  // Store only display history in this browser, never OAuth tokens.
+  function readAccountHistory() {
+    try {
+      const history = JSON.parse(localStorage.getItem(ACCOUNT_KEY) || 'null');
+      return history && typeof history.email === 'string' ? history : null;
+    } catch (_) { return null; }
+  }
+
+  function saveAccountHistory(changes) {
+    if (!accountEmail) return;
+    accountHistory = { ...accountHistory, ...changes, email: accountEmail };
+    try { localStorage.setItem(ACCOUNT_KEY, JSON.stringify(accountHistory)); }
+    catch (_) { /* History is optional; note storage is unaffected. */ }
+    renderAccountHistory();
+  }
+
+  function displayTime(timestamp) {
+    const date = new Date(timestamp);
+    if (!Number.isFinite(date.getTime())) return '';
+    const day = date.toDateString() === new Date().toDateString()
+      ? 'Today'
+      : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    return `${day}, ${date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+  }
+
+  function renderAccountHistory() {
+    const badge = element('driveStatus');
+    if (!badge) return;
+    let panel = element('driveAccountDetails');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'driveAccountDetails';
+      panel.className = 'drive-account-details';
+      badge.insertAdjacentElement('afterend', panel);
+    }
+
+    const connected = authorized && accountEmail && Date.now() < tokenExpiresAt - 10000;
+    const email = connected ? accountEmail : !authorized || status === 'expired' ? accountHistory?.email : '';
+    if (!email) { panel.hidden = true; return; }
+
+    panel.hidden = false;
+    panel.replaceChildren();
+    const account = document.createElement('div');
+    account.className = 'drive-account-line';
+    const label = document.createElement('span');
+    label.textContent = connected ? 'Connected account' : 'Last used account';
+    const address = document.createElement('strong');
+    address.textContent = email;
+    account.append(label, address);
+    panel.append(account);
+
+    for (const [key, title] of [['lastRestoredAt', 'Last restored'], ['lastBackupAt', 'Last Drive backup']]) {
+      const stamp = accountHistory?.[key];
+      if (!stamp) continue;
+      const row = document.createElement('div');
+      row.className = 'drive-history-line';
+      row.textContent = `${title}: ${displayTime(stamp)}`;
+      panel.append(row);
+    }
+  }
+
+  async function loadGoogleAccount() {
+    accountEmail = '';
+    renderAccountHistory();
+    try {
+      const about = await apiRequest('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,permissionId)');
+      const email = String(about.user?.emailAddress || '').trim();
+      if (!email) return; // Backups work even if Drive omits the email.
+      const permissionId = String(about.user?.permissionId || '');
+      const sameAccount = accountHistory && (
+        permissionId && accountHistory.permissionId
+          ? accountHistory.permissionId === permissionId
+          : accountHistory.email.toLowerCase() === email.toLowerCase()
+      );
+      accountEmail = email;
+      if (!sameAccount) accountHistory = null; // Never attribute another account's history to this one.
+      saveAccountHistory({ permissionId });
+    } catch (error) {
+      console.warn('Could not read Google Drive account email', error);
+    }
+  }
+
+  function recordDriveBackup() {
+    if (accountEmail) saveAccountHistory({
+      lastBackupAt: Date.parse(remoteFile?.modifiedTime || '') || Date.now()
+    });
+  }
+
   function showStatus(nextStatus, message) {
     status = nextStatus;
     statusText = message;
@@ -55,12 +146,14 @@
       badge.dataset.state = nextStatus;
       badge.textContent = message;
     }
+    renderAccountHistory();
     const active = authorized;
     for (const id of ['driveBackupNow', 'driveRestoreNow', 'driveDisconnect']) {
       if (element(id)) element(id).hidden = !active;
     }
     if (element('driveConnect')) {
-      element('driveConnect').textContent = active ? 'Reconnect' : 'Connect Google Drive';
+      element('driveConnect').textContent = active ? 'Change account'
+        : accountHistory?.email ? 'Reconnect Google Drive' : 'Connect Google Drive';
       element('driveConnect').disabled = busy || ['connecting', 'checking', 'restoring'].includes(nextStatus);
     }
     if (element('driveBackupNow')) element('driveBackupNow').disabled = !ready || busy;
@@ -297,6 +390,8 @@
     hasLocalNotes = !!backup.notes.length;
     remoteSnapshot = backup;
     rememberBackup();
+    recordDriveBackup();
+    saveAccountHistory({ lastRestoredAt: Date.now() });
     ready = true;
     pending = false;
     hideConflict();
@@ -331,6 +426,7 @@
 
   async function onConnected() {
     showStatus('checking', 'Checking Google Drive...');
+    await loadGoogleAccount();
     remoteFile = await findBackupFile();
     remoteSnapshot = null;
     const local = await callbacks.getSnapshot();
@@ -351,6 +447,7 @@
     }
     if (dataMatches(local, remote)) {
       rememberBackup();
+      recordDriveBackup();
       ready = true;
       showStatus('ready', 'Up to date on Google Drive');
       return;
@@ -446,6 +543,7 @@
       }
       if (!force && remoteSnapshot && dataMatches(snapshot, remoteSnapshot)) {
         rememberBackup();
+        recordDriveBackup();
         showStatus('ready', 'Up to date on Google Drive');
         return true;
       }
@@ -456,6 +554,7 @@
       if (!result) return false;
       remoteSnapshot = exported;
       rememberBackup();
+      recordDriveBackup();
       showStatus('ready', 'Backed up to Google Drive');
       return true;
     } catch (error) {
@@ -494,13 +593,17 @@
     tokenExpiresAt = 0;
     remoteFile = null;
     remoteSnapshot = null;
+    accountEmail = '';
+    accountHistory = null;
+    try { localStorage.removeItem(ACCOUNT_KEY); } catch (_) { /* Optional. */ }
     hideConflict();
     showStatus('disconnected', 'Not connected • notes remain on this device');
   }
 
   function initialize(options) {
     callbacks = options;
-    showStatus('disconnected', configured() ? 'Not connected' : 'Google Drive setup required');
+    showStatus('disconnected', !configured() ? 'Google Drive setup required'
+      : accountHistory?.email ? 'Reconnect to resume Google Drive backups' : 'Not connected');
     element('driveConnect')?.addEventListener('click', connect);
     element('driveEmptyConnect')?.addEventListener('click', () => {
       element('driveEmptyConnect').blur();

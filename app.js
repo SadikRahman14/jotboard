@@ -1771,3 +1771,251 @@
     }
     initialize();
 })();
+
+
+
+/* Custom dropdowns for all select elements */
+
+(() => {
+  let activeDropdown = null;
+
+  function close(dropdown = activeDropdown, returnFocus = false) {
+    if (!dropdown) return;
+
+    dropdown.menu.hidden = true;
+    dropdown.trigger.setAttribute("aria-expanded", "false");
+    dropdown.wrapper.classList.remove("is-open", "opens-up");
+
+    if (activeDropdown === dropdown) activeDropdown = null;
+    if (returnFocus) dropdown.trigger.focus();
+  }
+
+  function refresh(dropdown, rebuild = false) {
+    const { select, trigger, menu } = dropdown;
+    const selected = select.selectedOptions[0];
+    const label = selected?.textContent.trim() || "Select";
+
+    trigger.querySelector(".jb-dropdown-value").textContent = label;
+    trigger.setAttribute(
+      "aria-label",
+      `${select.getAttribute("aria-label") || "Choose option"}: ${label}`
+    );
+
+    if (rebuild) {
+      menu.replaceChildren();
+
+      [...select.options].forEach((option, index) => {
+        const item = document.createElement("button");
+
+        item.type = "button";
+        item.className = "jb-dropdown-option";
+        item.dataset.index = index;
+        item.setAttribute("role", "menuitemradio");
+        item.textContent = option.textContent;
+        item.disabled = option.disabled;
+
+        menu.append(item);
+      });
+    }
+
+    [...menu.children].forEach((item, index) => {
+      const chosen = index === select.selectedIndex;
+
+      item.classList.toggle("is-selected", chosen);
+      item.setAttribute("aria-checked", String(chosen));
+    });
+  }
+
+  function open(dropdown, focusOption = false) {
+    if (activeDropdown) close();
+
+    refresh(dropdown, true);
+
+    const { wrapper, trigger, menu } = dropdown;
+
+    menu.hidden = false;
+    wrapper.classList.add("is-open");
+    trigger.setAttribute("aria-expanded", "true");
+
+    const bounds = wrapper.getBoundingClientRect();
+    const spaceBelow = innerHeight - bounds.bottom;
+
+    wrapper.classList.toggle(
+      "opens-up",
+      spaceBelow < menu.offsetHeight + 10 && bounds.top > spaceBelow
+    );
+
+    menu.style.left =
+      bounds.left + Math.max(bounds.width, 170) > innerWidth - 10
+        ? "auto"
+        : "0";
+
+    menu.style.right = menu.style.left === "auto" ? "0" : "auto";
+
+    activeDropdown = dropdown;
+
+    if (focusOption) {
+      const selected = menu.querySelector(".is-selected:not(:disabled)");
+      const first = menu.querySelector("button:not(:disabled)");
+
+      (selected || first)?.focus();
+    }
+  }
+
+  function enhance(select) {
+    // Remove the previous type-only dropdown if present.
+    const old = select.closest(".jot-select");
+    if (old) old.replaceWith(select);
+
+    if (select.closest(".jb-dropdown")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "jb-dropdown";
+
+    select.before(wrapper);
+    wrapper.append(select);
+    select.hidden = true;
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "jb-dropdown-trigger";
+    trigger.setAttribute("aria-haspopup", "menu");
+    trigger.setAttribute("aria-expanded", "false");
+
+    trigger.innerHTML = `
+      <span class="jb-dropdown-value"></span>
+      <span class="jb-dropdown-arrow" aria-hidden="true"></span>
+    `;
+
+    const menu = document.createElement("div");
+    menu.className = "jb-dropdown-menu";
+    menu.setAttribute("role", "menu");
+    menu.hidden = true;
+
+    wrapper.append(trigger, menu);
+
+    const dropdown = { select, wrapper, trigger, menu };
+    refresh(dropdown, true);
+
+    // Preserve rich-text selection when choosing a font.
+    if (select.id === "fontSelect") {
+      trigger.addEventListener("pointerdown", () => {
+        select.dispatchEvent(new Event("pointerdown"));
+      });
+    }
+
+    trigger.addEventListener("click", () => {
+      menu.hidden ? open(dropdown) : close(dropdown);
+    });
+
+    trigger.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !menu.hidden) {
+        event.preventDefault();
+        event.stopPropagation();
+        close(dropdown, true);
+        return;
+      }
+
+      if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
+
+      event.preventDefault();
+      open(dropdown, true);
+    });
+
+    menu.addEventListener("click", event => {
+      const item = event.target.closest("[data-index]");
+      if (!item || item.disabled) return;
+
+      select.selectedIndex = Number(item.dataset.index);
+
+      select.dispatchEvent(
+        new Event("change", { bubbles: true })
+      );
+
+      refresh(dropdown);
+      close(dropdown, true);
+    });
+
+    menu.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        close(dropdown, true);
+        return;
+      }
+
+      if (event.key === "Tab") {
+        close(dropdown);
+        return;
+      }
+
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const items = [...menu.querySelectorAll("button:not(:disabled)")];
+      const index = items.indexOf(document.activeElement);
+
+      const next =
+        event.key === "Home" ? 0 :
+        event.key === "End" ? items.length - 1 :
+        (index + (event.key === "ArrowDown" ? 1 : -1) + items.length)
+          % items.length;
+
+      items[next]?.focus();
+    });
+
+    select.addEventListener("change", () => refresh(dropdown));
+
+    // Keep dynamic label options synchronized.
+    new MutationObserver(() => refresh(dropdown, true)).observe(select, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["disabled", "label"]
+    });
+
+    // Keep the display synchronized when app.js changes select.value.
+    const valueProperty = Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      "value"
+    );
+
+    Object.defineProperty(select, "value", {
+      configurable: true,
+
+      get() {
+        return valueProperty.get.call(this);
+      },
+
+      set(value) {
+        valueProperty.set.call(this, value);
+        refresh(dropdown);
+      }
+    });
+  }
+
+  function initialize() {
+    document.querySelectorAll("select").forEach(enhance);
+
+    document.addEventListener("pointerdown", event => {
+      if (activeDropdown && !activeDropdown.wrapper.contains(event.target)) {
+        close();
+      }
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && activeDropdown) {
+        close(activeDropdown, true);
+      }
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initialize);
+  } else {
+    initialize();
+  }
+})();

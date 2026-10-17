@@ -146,3 +146,17 @@
   .topbar-right { gap: 1px; }
   .topbar-right .icon-btn { width: 29px; min-width: 29px; }
 }
+
+/* Account identity and backup activity, remembered across page reloads. */
+.drive-account-details {
+  display: grid;
+  gap: 7px;
+  padding: 11px 13px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--panel-2);
+  font-size: 12px;
+}
+.drive-account-line { display: flex; flex-wrap: wrap; gap: 5px 12px; align-items: baseline; }
+.drive-account-line span, .drive-history-line { color: var(--muted); }
+.drive-account-line strong { font-weight: 650; color: var(--text); overflow-wrap: anywhere; }
