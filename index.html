@@ -5,10 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#15171d" />
   <meta name="description" content="Jotboard is a minimal, local-first notes application." />
-  <title>Jotboard</title>
+  <title>Jotboard — Notes</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./google-drive.css" />
   <script src="./vendor/marked.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script defer src="./google-config.js"></script>
+  <script defer src="./google-drive.js"></script>
   <script defer src="./app.js"></script>
 </head>
 <body data-theme="dark">
@@ -46,6 +50,7 @@
           <button type="button" class="search-command-trigger" id="commandPaletteButton" title="Commands (Ctrl+K)" aria-label="Open commands"><span data-icon="menu"></span></button>
         </div>
         <div class="topbar-right">
+          <button type="button" id="driveTopButton" class="icon-btn drive-top-action" title="Google Drive backup" aria-label="Google Drive backup">☁</button>
           <button type="button" class="backup-reminder" id="backupReminder" title="Download a JSON backup" hidden><span data-icon="clock"></span><span>Back up</span></button>
           <div class="backup-info-wrap" id="backupInfoWrap">
             <button type="button" class="icon-btn backup-info-button" id="backupInfoButton"
@@ -53,9 +58,8 @@
                     aria-controls="backupInfoPopover" title="Local storage and backup">i</button>
             <div class="backup-info-popover" id="backupInfoPopover" role="region"
                  aria-label="Local storage information" hidden>
-              <strong>Local-only notes</strong>
-              <p>Your notes are saved in <b>this browser's database (IndexedDB)</b>,
-                 not in the cloud. Clearing browser data may erase them.</p>
+              <strong>Local-first notes</strong>
+              <p>Notes are saved in <b>this browser (IndexedDB)</b>. Google Drive backup is optional. Clearing site data may erase local notes.</p>
               <small id="lastBackupInfo" class="last-backup-info"></small>
               <button type="button" class="backup-download-button"
                       id="downloadJsonBackup" disabled>
@@ -65,7 +69,7 @@
           </div>
           <button class="icon-btn" type="button" id="importMarkdownTop" title="Import Markdown" aria-label="Import Markdown"><span data-icon="upload"></span></button>
           <button class="icon-btn" type="button" id="themeToggle" aria-label="Toggle theme" title="Toggle theme"><span data-icon="sun"></span></button>
-          <button class="icon-btn" type="button" id="avatarSettings" aria-label="Settings" title="Settings"><span data-icon="sliders"></span></button>
+          <a href="/privacy.html">Privacy Policy</a>
         </div>
       </header>
 
@@ -98,7 +102,7 @@
           </div>
         </div>
         <section class="notes-grid" id="notesGrid" aria-label="Notes"></section>
-        <div class="no-notes" id="emptyState" hidden><div class="empty-illustration"><span data-icon="notebook"></span></div><p id="emptyHeading">No notes yet</p></div>
+        <div class="no-notes" id="emptyState" hidden><div class="empty-illustration"><span data-icon="notebook"></span></div><p id="emptyHeading">No notes yet</p><button type="button" id="driveEmptyConnect" class="drive-empty-action">Restore from Google Drive</button></div>
       </main>
     </div>
   </div>
@@ -158,8 +162,31 @@
     </section>
   </div>
 
-  <div class="modal-backdrop" id="settingsOverlay" hidden><section class="settings-modal" role="dialog" aria-modal="true" aria-label="Settings and backup"><div class="settings-header"><div><h2>Settings</h2></div><button type="button" class="icon-btn" id="settingsClose" aria-label="Close settings"><span data-icon="x"></span></button></div><div class="settings-section"><h3>Wallpaper</h3><div class="settings-actions"><button type="button" class="outline-btn" id="chooseWallpaper"><span data-icon="image-plus"></span> Choose image</button><button type="button" class="outline-btn" id="removeWallpaper"><span data-icon="x"></span> Remove image</button></div></div><div class="settings-section"><h3>Backup & import</h3><div class="settings-actions"><button type="button" class="outline-btn" id="exportBackup" disabled><span data-icon="download"></span> Export backup</button><button type="button" class="outline-btn" id="importBackup"><span data-icon="upload"></span> Restore JSON</button><button type="button" class="outline-btn" id="settingsImportMd"><span data-icon="file-code"></span> Import .md</button></div></div><div class="settings-note"><span data-icon="shield-check"></span><div><strong>Local storage</strong><p>Notes stay in this browser. Clearing site data deletes them, so export backups regularly.</p></div></div><div class="shortcuts"><h3>Keyboard shortcuts</h3><div><span>Rich text / Markdown</span><kbd>N / M</kbd></div><div><span>Commands</span><kbd>Ctrl / ⌘ + K</kbd></div><div><span>Search</span><kbd>Ctrl / ⌘ + K</kbd></div><div><span>Save note</span><kbd>Ctrl / ⌘ + S</kbd></div><div><span>Close editor</span><kbd>Esc</kbd></div></div></section></div>
+  <div class="modal-backdrop" id="settingsOverlay" hidden><section class="settings-modal" role="dialog" aria-modal="true" aria-label="Settings and backup"><div class="settings-header"><div><h2>Settings</h2></div><button type="button" class="icon-btn" id="settingsClose" aria-label="Close settings"><span data-icon="x"></span></button></div><div class="settings-section"><h3>Wallpaper</h3><div class="settings-actions"><button type="button" class="outline-btn" id="chooseWallpaper"><span data-icon="image-plus"></span> Choose image</button><button type="button" class="outline-btn" id="removeWallpaper"><span data-icon="x"></span> Remove image</button></div></div><div class="settings-section drive-settings" id="driveSettings">
+  <h3>Google Drive</h3>
+  <p class="drive-description">Connect Google Drive to back up notes and restore them on another device. Jotboard requests access only to files used with this app.</p>
+  <div id="driveStatus" class="drive-status" role="status" aria-live="polite">Not connected</div>
+  <div class="drive-actions">
+    <button type="button" class="primary-btn" id="driveConnect">Connect Google Drive</button>
+    <button type="button" class="outline-btn" id="driveBackupNow" hidden>Back up now</button>
+    <button type="button" class="outline-btn" id="driveRestoreNow" hidden>Restore from Drive</button>
+    <button type="button" class="outline-btn" id="driveConflictOpen" hidden>Review versions</button>
+    <button type="button" class="subtle-btn" id="driveDisconnect" hidden>Disconnect</button>
+  </div>
+</div><div class="settings-section"><h3>Backup & import</h3><div class="settings-actions"><button type="button" class="outline-btn" id="exportBackup" disabled><span data-icon="download"></span> Export backup</button><button type="button" class="outline-btn" id="importBackup"><span data-icon="upload"></span> Restore JSON</button><button type="button" class="outline-btn" id="settingsImportMd"><span data-icon="file-code"></span> Import .md</button></div></div><div class="settings-note"><span data-icon="shield-check"></span><div><strong>Local storage</strong><p>Notes save in this browser. Export JSON or connect Google Drive for recovery.</p></div></div><div class="shortcuts"><h3>Keyboard shortcuts</h3><div><span>Rich text / Markdown</span><kbd>N / M</kbd></div><div><span>Commands</span><kbd>Ctrl / ⌘ + K</kbd></div><div><span>Search</span><kbd>Ctrl / ⌘ + K</kbd></div><div><span>Save note</span><kbd>Ctrl / ⌘ + S</kbd></div><div><span>Close editor</span><kbd>Esc</kbd></div></div></section></div>
 
+
+  <div class="modal-backdrop" id="driveConflictOverlay" hidden>
+    <section class="drive-conflict-modal" role="dialog" aria-modal="true" aria-label="Choose which notes to keep">
+      <h2>Two different note collections</h2>
+      <p>Notes on this device differ from the backup on Google Drive. Choose one copy. Jotboard won't overwrite either automatically.</p>
+      <div class="drive-conflict-actions">
+        <button type="button" class="primary-btn" id="driveConflictDrive">Use Drive copy</button>
+        <button type="button" class="outline-btn" id="driveConflictLocal">Keep this device's notes</button>
+        <button type="button" class="subtle-btn" id="driveConflictCancel">Cancel</button>
+      </div>
+    </section>
+  </div>
   <input type="file" accept=".md,.markdown,text/markdown,text/plain" multiple id="markdownFileInput" hidden />
   <input type="file" accept=".json,application/json" id="jsonFileInput" hidden />
   <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" id="backgroundFileInput" hidden />

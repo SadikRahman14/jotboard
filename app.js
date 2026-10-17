@@ -1,4 +1,4 @@
-/* Jotboard — local-first notes. No remote APIs or runtime dependencies. */
+/* Jotboard — local-first notes with optional Google Drive backup. */
 (() => {
     'use strict';
     const byId = (id) => document.getElementById(id);
@@ -102,7 +102,12 @@
                 request.onsuccess = () => {
                     result = request.result;
                 };
-                tx.oncomplete = () => resolve(result);
+                tx.oncomplete = () => {
+                    if (store === 'notes' && ['put', 'delete', 'clear'].includes(method)) {
+                        window.JotboardDrive?.onLocalSaved();
+                    }
+                    resolve(result);
+                };
                 tx.onerror = () => reject(tx.error || request.error || new Error('Database transaction failed'));
                 tx.onabort = () => reject(tx.error || new Error('Database transaction aborted'));
             } catch (error) {
@@ -918,6 +923,7 @@
         selectionRange = null;
         editorBusy = false;
         renderBoard();
+        window.JotboardDrive?.syncNow();
         return true;
     }
     function changeEditorMode(mode) {
@@ -1151,6 +1157,58 @@
         byId('backupInfoPopover').hidden = !isOpen;
         byId('backupInfoButton').setAttribute('aria-expanded', String(isOpen));
     }
+    function normalizeBackupNotes(data) {
+        if (data?.format !== 'jotboard-backup' || !Array.isArray(data.notes) || data.notes.length > 10000)
+            throw new Error('Not a supported Jotboard backup');
+        return data.notes.map((note, index) => ({
+            id: typeof note.id === 'string' ? note.id : createNoteId(),
+            title: String(note.title || '').slice(0, 180),
+            type: note.type === 'markdown' ? 'markdown' : 'rich',
+            html: sanitizeHTML(String(note.html || '')),
+            markdown: String(note.markdown || ''),
+            color: getNoteColor(note.color).id,
+            width: CARD_COLUMNS.includes(Number(note.width)) ? Number(note.width) : 4,
+            pinned: !!note.pinned,
+            tags: Array.isArray(note.tags)
+                ? note.tags.filter(tag => typeof tag === 'string').map(tag => tag.slice(0, 65)).slice(0, 12)
+                : [],
+            archived: !!note.archived,
+            deleted: !!note.deleted,
+            createdAt: Number(note.createdAt) || Date.now(),
+            updatedAt: Number(note.updatedAt) || Date.now(),
+            order: Number.isFinite(note.order) ? note.order : index,
+            backgroundImage: safeImageURL(note.backgroundImage),
+            editorWidth: Number(note.editorWidth) || 800
+            }));
+    }
+
+    async function restoreCloudSnapshot(data) {
+        if (state.draft) throw new Error('Close the note editor before restoring a backup.');
+        const restored = normalizeBackupNotes(data);
+        await replaceAllNotes(restored);
+        state.notes = restored;
+        if (data.settings) {
+            state.settings = {
+                ...defaultSettings, ...data.settings, id: 'main',
+                theme: data.settings.theme === 'light' ? 'light' : 'dark',
+                sort: ['manual', 'recent', 'oldest', 'title'].includes(data.settings.sort) ? data.settings.sort : 'manual',
+                view: ['grid', 'custom', 'list'].includes(data.settings.view) ? data.settings.view : 'grid',
+                wallpaper: safeImageURL(data.settings.wallpaper),
+                lastBackupAt: Date.parse(data.exportedAt) || 0
+            };
+            await persistSettings();
+        }
+        state.filter = 'all';
+        state.tag = null;
+        state.search = '';
+        state.searchType = 'all';
+        state.searchLabel = '';
+        byId('searchInput').value = '';
+        useSettings();
+        renderBoard();
+        closeSettings();
+    }
+
     async function restoreBackup(file) {
         try {
             const raw = await file.text();
@@ -1160,26 +1218,7 @@
             if (data.notes.length > 10000) throw new Error('Backup contains too many notes');
             if (!confirm('Restore this backup? This REPLACES all current notes in this browser. Export your existing notes first if needed.'))
                 return;
-            const restored = data.notes.map((note, index) => ({
-                id: typeof note.id === 'string' ? note.id : createNoteId(),
-                title: String(note.title || '').slice(0, 180),
-                type: note.type === 'markdown' ? 'markdown' : 'rich',
-                html: sanitizeHTML(String(note.html || '')),
-                markdown: String(note.markdown || ''),
-                color: getNoteColor(note.color).id,
-                width: CARD_COLUMNS.includes(Number(note.width)) ? Number(note.width) : 4,
-                pinned: !!note.pinned,
-                tags: Array.isArray(note.tags)
-                    ? note.tags.filter(tag => typeof tag === 'string').map(tag => tag.slice(0, 65)).slice(0, 12)
-                    : [],
-                archived: !!note.archived,
-                deleted: !!note.deleted,
-                createdAt: Number(note.createdAt) || Date.now(),
-                updatedAt: Number(note.updatedAt) || Date.now(),
-                order: Number.isFinite(note.order) ? note.order : index,
-                backgroundImage: safeImageURL(note.backgroundImage),
-                editorWidth: Number(note.editorWidth) || 800
-            }));
+            const restored = normalizeBackupNotes(data);
             await replaceAllNotes(restored);
             state.notes = restored;
             if (data.settings) {
@@ -1203,6 +1242,7 @@
             renderBoard();
             closeSettings();
             toast('Backup restored: ' + restored.length + ' notes');
+            window.JotboardDrive?.onLocalSaved();
         } catch (e) {
             console.error(e);
             toast('Could not restore backup: ' + e.message);
@@ -1609,13 +1649,19 @@
                 if (state.draft) {
                     clearTimeout(saveTimer);
                     const ok = await saveDraft();
-                    if (ok)
+                    if (ok) {
                         toast(noteHasContent(state.draft) || state.notes.some(n => n.id === state.draft.id) ? 'Saved locally' : 'Start writing to save');
+                        window.JotboardDrive?.syncNow();
+                    }
                 } else
                     await exportBackup();
                 return;
             }
             if (e.key === 'Escape') {
+                if (!byId('driveConflictOverlay')?.hidden) {
+                    byId('driveConflictCancel')?.click();
+                    return;
+                }
                 if (!byId('commandOverlay').hidden) {
                     closeCommandPalette();
                     return;
@@ -1687,6 +1733,26 @@
             state.notes = notes;
             byId('downloadJsonBackup').disabled = false;
             byId('exportBackup').disabled = false;
+            window.JotboardDrive?.initialize({
+                getSnapshot: async () => {
+                    await saveChain;
+                    const [savedNotes, savedSettings] = await Promise.all([
+                        databaseRequest('notes', 'getAll'),
+                        databaseRequest('settings', 'get', 'main')
+                    ]);
+                    return {
+                        format: 'jotboard-backup',
+                        version: 1,
+                        notes: savedNotes,
+                        settings: savedSettings || state.settings
+                    };
+                },
+                restoreSnapshot: restoreCloudSnapshot
+            });
+            byId('driveTopButton')?.addEventListener('click', () => {
+                showSettings();
+                byId('driveConnect')?.focus();
+            });
         } catch (e) {
             console.error('Could not open Jotboard storage', e);
             byId('notesGrid').innerHTML = '<p style="color:#ffa9a9">Could not open saved notes. Please check browser storage.</p>';

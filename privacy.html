@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#191b20"><meta name="description" content="Jotboard privacy policy for local notes and optional Google Drive backup."><title>Privacy Policy | Jotboard</title><style>
+:root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #191b20; color: #eef1ed; line-height: 1.7; }
+header { border-bottom: 1px solid #353b43; padding: 18px max(24px, calc((100vw - 860px)/2)); }
+.brand { display: inline-flex; gap: 12px; align-items: center; text-decoration: none; color: #eef1ed; font-size: 22px; font-weight: 800; letter-spacing: -1px; }
+.mark { display: grid; grid-template-columns: repeat(2, 9px); grid-template-rows: repeat(2, 9px); gap: 4px; }
+.mark span { border-radius: 2px; background: #d8f477; }
+.mark span:nth-child(2) { opacity: .7; } .mark span:nth-child(3) { opacity: .8; }
+.dot { color: #d8f477; }
+main { max-width: 860px; padding: 35px 24px 70px; margin: auto; }
+h1 { font-size: clamp(26px, 4vw, 38px); line-height: 1.2; margin: 0 0 10px; letter-spacing: -.7px; }
+h2 { font-size: 20px; line-height: 1.3; margin: 36px 0 12px; }
+h1 + p { color: #a7adb6; font-size: 13px; }
+p, li { font-size: 14px; color: #c4c9ce; }
+ul { padding-left: 22px; } li { margin: 7px 0; }
+strong { color: #f0f3ed; }
+a { color: #d8f477; text-underline-offset: 3px; overflow-wrap: anywhere; }
+code { padding: 2px 5px; border-radius: 3px; background: #2c3139; color: #e0f89e; }
+footer { padding: 22px; text-align: center; border-top: 1px solid #353b43; color: #969ca5; font-size: 12px; }
+@media (max-width: 520px) { header { padding: 14px 20px; } main { padding: 24px 20px 50px; } }
+</style></head>
+<body><header><a class="brand" href="/" aria-label="Jotboard home"><span class="mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>jotboard<span class="dot">.</span></a></header>
+<main><h1>Jotboard Privacy Policy</h1>
+<p><strong>Last updated: October 17, 2026</strong></p>
+<p>Jotboard is a local-first notes application available at <a href="https://jotboard-five.vercel.app/">https://jotboard-five.vercel.app/</a>. This Privacy Policy explains how Jotboard handles your notes and what happens if you choose to connect Google Drive.</p>
+<p>Jotboard is operated by <strong>Sadik Rahman Chowdhury</strong>. For privacy questions, contact <strong>sadik.nai.008@gmail.com</strong>.</p>
+<h2>1. Notes stored on your device</h2>
+<p>Jotboard stores your notes and app preferences in your browser's local storage system (IndexedDB). This can include note titles and text, Markdown and rich-text formatting, labels, colors, images or backgrounds you add, timestamps, and note settings.</p>
+<p>You can use Jotboard without connecting a Google account. In that case, notes remain in the browser where you created them, unless you choose to export a backup. Clearing that browser's site data or losing access to the device may erase those local notes.</p>
+<p>Jotboard does not use a Jotboard-operated cloud database to store your note content.</p>
+<h2>2. Optional Google Drive backup and recovery</h2>
+<p>If you choose <strong>Connect Google Drive</strong>, Jotboard asks Google for the <code>https://www.googleapis.com/auth/drive.file</code> permission. This allows Jotboard to create, find, read, and update files it creates or that you use with Jotboard. It does <strong>not</strong> request broad access to all your Drive files, Gmail, or contacts.</p>
+<p>Jotboard uses this permission only to:</p>
+<ul>
+<li>Create and maintain a <strong>Jotboard</strong> folder and a <code>jotboard-backup.json</code> file in your Google Drive.</li>
+<li>Upload a JSON snapshot of your notes and relevant app settings, including any images saved as part of your notes.</li>
+<li>Update the backup after you save changes or after a short period of inactivity while the app is open and authorized.</li>
+<li>Read that backup to restore notes when you choose to connect on another browser or device, and to compare copies to help prevent accidental overwrites.</li>
+</ul>
+<p>The backup is stored in <strong>your Google Drive account</strong> and is subject to <a href="https://policies.google.com/privacy">Google's Privacy Policy</a> and your Google Drive sharing and security settings. Jotboard does not separately encrypt the JSON file before uploading it to Drive.</p>
+<p>Google Drive backup is optional. If you do not grant permission, Jotboard continues to work with local notes and manual JSON exports.</p>
+<h2>3. Google authorization information</h2>
+<p>Google handles the authorization process. Jotboard does not ask for or receive your Google password. The current integration uses a temporary Google access token in browser memory to perform the Drive actions you approve. It does not send that token to a Jotboard-operated backend or store a Google refresh token.</p>
+<p>Authorization may expire, and you may need to reconnect. Jotboard does not continue backing up notes while its page is closed.</p>
+<p>Jotboard's use of information received from Google APIs follows the <strong>Google API Services User Data Policy</strong>, including its <strong>Limited Use requirements</strong>. Google data is used only for the backup and recovery features you request. Jotboard does not sell Google user data, use it for advertising, or use it to train AI models.</p>
+<h2>4. Sharing and third-party services</h2>
+<p>Your note content is not sent to a Jotboard-operated notes server. When you enable backup, Jotboard sends the backup directly from your browser to the Google Drive API with your authorization.</p>
+<p>Jotboard's website is hosted by a third-party hosting provider, which may process routine technical information such as IP addresses and request logs to deliver and secure the site. Google may also process information necessary to provide sign-in and Drive services under its own policies.</p>
+<p>Jotboard does not intentionally include advertising trackers or sell your notes or personal information to advertisers or data brokers.</p>
+<h2>5. Your choices and data deletion</h2>
+<p>You can view, edit, export, and delete notes in Jotboard. You can download a JSON backup at any time.</p>
+<ul>
+<li><strong>Remove local data:</strong> Permanently delete notes in Jotboard or clear Jotboard's site data in your browser. Clearing site data removes locally stored notes and preferences from that browser.</li>
+<li><strong>Stop future Drive backups:</strong> Use <strong>Disconnect</strong> in Jotboard. This ends the app's current Drive connection but does not delete files already uploaded to Google Drive.</li>
+<li><strong>Delete your Drive backup:</strong> Disconnect Jotboard, then delete <code>Jotboard/jotboard-backup.json</code> (or the Jotboard folder) from your Google Drive. You can also remove Jotboard's Google account access at <a href="https://myaccount.google.com/connections">Google Account Connections</a>.</li>
+</ul>
+<p>Notes placed in Jotboard's Trash may still be included in a backup until they are permanently deleted and a new successful backup is uploaded. Copies or file versions retained by Google are subject to Google's policies.</p>
+<h2>6. Security and limitations</h2>
+<p>Jotboard is designed to keep notes on your device by default and to request only the Google Drive permission needed for optional backups. However, no browser storage or online storage service can be guaranteed completely secure. Protect access to your device and Google account, and keep an independent JSON backup of important notes.</p>
+<p>Google Drive backup is a recovery feature, <strong>not real-time, conflict-free synchronization</strong>. If different devices contain different notes, Jotboard may ask you which copy to keep.</p>
+<h2>7. Changes to this policy</h2>
+<p>We may update this Privacy Policy when Jotboard's features or data practices change. The updated version will appear on this page with a new &quot;Last updated&quot; date. If changes materially affect how Google user data is handled, we will provide an appropriate notice in the app.</p>
+<h2>8. Contact</h2>
+<p>For questions about this Privacy Policy or Jotboard's handling of your information, contact:</p>
+<p><strong>[YOUR NAME OR ORGANIZATION]</strong><br />
+<strong>[YOUR CONTACT EMAIL]</strong></p>
+</main><footer>Jotboard &middot; <a href="/">Back to notes</a></footer></body></html>
