@@ -69,7 +69,7 @@
           </div>
           <button class="icon-btn" type="button" id="importMarkdownTop" title="Import Markdown" aria-label="Import Markdown"><span data-icon="upload"></span></button>
           <button class="icon-btn" type="button" id="themeToggle" aria-label="Toggle theme" title="Toggle theme"><span data-icon="sun"></span></button>
-          <a href="/privacy.html">Privacy Policy</a>
+          
         </div>
       </header>
 
@@ -103,6 +103,7 @@
         </div>
         <section class="notes-grid" id="notesGrid" aria-label="Notes"></section>
         <div class="no-notes" id="emptyState" hidden><div class="empty-illustration"><span data-icon="notebook"></span></div><p id="emptyHeading">No notes yet</p><button type="button" id="driveEmptyConnect" class="drive-empty-action">Restore from Google Drive</button></div>
+        <footer class="jotboard-footer"><a href="/privacy.html">Privacy Policy</a></footer>
       </main>
     </div>
   </div>
@@ -170,11 +171,25 @@
     <button type="button" class="primary-btn" id="driveConnect">Connect Google Drive</button>
     <button type="button" class="outline-btn" id="driveBackupNow" hidden>Back up now</button>
     <button type="button" class="outline-btn" id="driveRestoreNow" hidden>Restore from Drive</button>
+    <a class="outline-btn drive-open-file" id="driveOpenFile" href="#" target="_blank" rel="noopener noreferrer" hidden>Open backup in Drive ↗</a>
     <button type="button" class="outline-btn" id="driveConflictOpen" hidden>Review versions</button>
     <button type="button" class="subtle-btn" id="driveDisconnect" hidden>Disconnect</button>
   </div>
 </div><div class="settings-section"><h3>Backup & import</h3><div class="settings-actions"><button type="button" class="outline-btn" id="exportBackup" disabled><span data-icon="download"></span> Export backup</button><button type="button" class="outline-btn" id="importBackup"><span data-icon="upload"></span> Restore JSON</button><button type="button" class="outline-btn" id="settingsImportMd"><span data-icon="file-code"></span> Import .md</button></div></div><div class="settings-note"><span data-icon="shield-check"></span><div><strong>Local storage</strong><p>Notes save in this browser. Export JSON or connect Google Drive for recovery.</p></div></div><div class="shortcuts"><h3>Keyboard shortcuts</h3><div><span>Rich text / Markdown</span><kbd>N / M</kbd></div><div><span>Commands</span><kbd>Ctrl / ⌘ + K</kbd></div><div><span>Search</span><kbd>Ctrl / ⌘ + K</kbd></div><div><span>Save note</span><kbd>Ctrl / ⌘ + S</kbd></div><div><span>Close editor</span><kbd>Esc</kbd></div></div></section></div>
 
+
+  <div class="modal-backdrop" id="driveWelcomeOverlay" hidden>
+    <section class="drive-welcome-modal" role="dialog" aria-modal="true" aria-labelledby="driveWelcomeTitle" aria-describedby="driveWelcomeDescription">
+      <div class="drive-welcome-icon" aria-hidden="true">☁</div>
+      <h2 id="driveWelcomeTitle">Have notes on another device?</h2>
+      <p id="driveWelcomeDescription">Connect your Google account to restore your Jotboard notes from Drive. You can also continue without connecting.</p>
+      <div class="drive-welcome-actions">
+        <button type="button" class="primary-btn" id="driveWelcomeConnect">Connect Google Drive</button>
+        <button type="button" class="subtle-btn" id="driveWelcomeSkip">Not now</button>
+      </div>
+      <small>Jotboard keeps notes in this browser and uses Drive only with your permission.</small>
+    </section>
+  </div>
 
   <div class="modal-backdrop" id="driveConflictOverlay" hidden>
     <section class="drive-conflict-modal" role="dialog" aria-modal="true" aria-label="Choose which notes to keep">

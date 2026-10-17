@@ -8,6 +8,8 @@
   const FILE_NAME = 'jotboard-backup.json';
   const FOLDER_NAME = 'Jotboard';
   const AUTO_BACKUP_DELAY = 15000;
+  const PAIR_KEY = 'jotboard_drive_last_backup_v1';
+  const WELCOME_DISMISS_KEY = 'jotboard_drive_welcome_dismissed_v1';
 
   let callbacks;
   let accessToken = '';
@@ -22,12 +24,28 @@
   let revisions = 0;
   let status = 'disconnected';
   let statusText = 'Not connected';
+  let hasLocalNotes = true; // Hide restore nudges until storage is checked.
 
   const element = id => document.getElementById(id);
   const configured = () => {
     const id = window.JOTBOARD_GOOGLE_CLIENT_ID;
     return typeof id === 'string' && /\.apps\.googleusercontent\.com$/.test(id) && !id.includes('YOUR_');
   };
+
+  // Remember only the Drive file/version, never Google access tokens.
+  function lastConnectedBackup() {
+    try { return JSON.parse(localStorage.getItem(PAIR_KEY) || 'null'); }
+    catch (_) { return null; }
+  }
+
+  function rememberBackup() {
+    if (!remoteFile?.id || !remoteFile.version) return;
+    try {
+      localStorage.setItem(PAIR_KEY, JSON.stringify({
+        id: remoteFile.id, version: String(remoteFile.version)
+      }));
+    } catch (_) { /* Browser storage may be restricted. */ }
+  }
 
   function showStatus(nextStatus, message) {
     status = nextStatus;
@@ -49,7 +67,16 @@
     if (element('driveRestoreNow')) element('driveRestoreNow').disabled = !remoteFile || busy;
     if (element('driveConflictOpen')) element('driveConflictOpen').hidden = nextStatus !== 'conflict';
     if (element('driveEmptyConnect')) element('driveEmptyConnect').textContent = configured() ? 'Restore from Google Drive' : 'Set up Google Drive';
-    if (element('driveEmptyConnect')) element('driveEmptyConnect').hidden = !!remoteFile || ready;
+    if (element('driveEmptyConnect')) element('driveEmptyConnect').hidden = hasLocalNotes || !!remoteFile || ready;
+    const driveLink = element('driveOpenFile');
+    if (driveLink) {
+      const url = authorized && remoteFile?.id
+        ? remoteFile.webViewLink || `https://drive.google.com/file/d/${encodeURIComponent(remoteFile.id)}/view`
+        : null;
+      driveLink.hidden = !url;
+      if (url) driveLink.href = url;
+      else driveLink.removeAttribute('href');
+    }
   }
 
   function clearTimer() {
@@ -90,7 +117,7 @@
     return format === 'text' ? response.text() : response.json();
   }
 
-  function filesQuery(query, fields = 'nextPageToken,files(id,name,mimeType,parents,version,modifiedTime,appProperties)') {
+  function filesQuery(query, fields = 'nextPageToken,files(id,name,mimeType,parents,version,modifiedTime,appProperties,webViewLink)') {
     const params = new URLSearchParams({ q: query, fields, pageSize: '100' });
     return `${API}?${params}`;
   }
@@ -130,7 +157,7 @@
 
   async function currentFileVersion() {
     if (!remoteFile) return null;
-    return apiRequest(`${API}/${encodeURIComponent(remoteFile.id)}?fields=id,name,version,modifiedTime,mimeType`);
+    return apiRequest(`${API}/${encodeURIComponent(remoteFile.id)}?fields=id,name,version,modifiedTime,mimeType,webViewLink`);
   }
 
   async function fetchRemoteSnapshot() {
@@ -147,10 +174,11 @@
   }
 
   function comparable(snapshot) {
-    const settings = { ...(snapshot.settings || {}) };
-    delete settings.lastBackupAt;
-    const notes = [...(snapshot.notes || [])].sort((a, b) => String(a.id).localeCompare(String(b.id)));
-    return JSON.stringify({ notes, settings });
+    // A different theme or backup timestamp must not trigger a note conflict.
+    const notes = (snapshot.notes || [])
+      .map(({ updatedAt, ...note }) => note)
+      .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    return JSON.stringify(notes);
   }
 
   function dataMatches(first, second) {
@@ -162,8 +190,8 @@
   async function uploadResumable(metadata, media, fileId = null) {
     const size = new Blob([media]).size;
     const url = fileId
-      ? `${UPLOAD_API}/${encodeURIComponent(fileId)}?uploadType=resumable&fields=id,name,version,modifiedTime,mimeType`
-      : `${UPLOAD_API}?uploadType=resumable&fields=id,name,version,modifiedTime,mimeType`;
+      ? `${UPLOAD_API}/${encodeURIComponent(fileId)}?uploadType=resumable&fields=id,name,version,modifiedTime,mimeType,webViewLink`
+      : `${UPLOAD_API}?uploadType=resumable&fields=id,name,version,modifiedTime,mimeType,webViewLink`;
     if (!accessToken || Date.now() >= tokenExpiresAt - 10000) {
       pauseForReconnection();
       throw new Error('Please reconnect Google Drive.');
@@ -209,7 +237,7 @@
       `--${boundary}\r\nContent-Type: application/json\r\n\r\n${media}\r\n`,
       `--${boundary}--\r\n`
     ]);
-    return apiRequest(`${UPLOAD_API}?uploadType=multipart&fields=id,name,version,modifiedTime,mimeType`, {
+    return apiRequest(`${UPLOAD_API}?uploadType=multipart&fields=id,name,version,modifiedTime,mimeType,webViewLink`, {
       method: 'POST',
       headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
       body: multipart
@@ -220,18 +248,28 @@
     const current = await currentFileVersion();
     if (remoteFile.version && current?.version && String(current.version) !== String(remoteFile.version)) {
       remoteFile = current;
-      ready = false;
-      clearTimer();
-      showStatus('conflict', 'Drive changed on another device — review');
-      showConflict();
-      return false;
+      const latest = await fetchRemoteSnapshot();
+
+      // Metadata-only updates or an already-uploaded copy need no intervention.
+      if (dataMatches(latest, snapshot)) {
+        remoteSnapshot = latest;
+        return true;
+      }
+      if (!remoteSnapshot || !dataMatches(latest, remoteSnapshot)) {
+        ready = false;
+        clearTimer();
+        showStatus('conflict', 'Drive has newer notes — backup paused. Review in Settings.');
+        // Do not interrupt the editor with a modal during background backups.
+        return false;
+      }
+      remoteSnapshot = latest;
     }
     const media = JSON.stringify(snapshot);
     if (new Blob([media]).size > 4_750_000) {
       remoteFile = await uploadResumable({}, media, remoteFile.id);
       return true;
     }
-    remoteFile = await apiRequest(`${UPLOAD_API}/${encodeURIComponent(remoteFile.id)}?uploadType=media&fields=id,name,version,modifiedTime,mimeType`, {
+    remoteFile = await apiRequest(`${UPLOAD_API}/${encodeURIComponent(remoteFile.id)}?uploadType=media&fields=id,name,version,modifiedTime,mimeType,webViewLink`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json; charset=UTF-8' },
       body: media
@@ -256,7 +294,9 @@
     showStatus('restoring', 'Restoring from Google Drive...');
     const backup = await fetchRemoteSnapshot();
     await callbacks.restoreSnapshot(backup);
+    hasLocalNotes = !!backup.notes.length;
     remoteSnapshot = backup;
+    rememberBackup();
     ready = true;
     pending = false;
     hideConflict();
@@ -266,6 +306,7 @@
 
   async function resolveConflict(choice) {
     if (!authorized || !remoteFile) return;
+    const wasConflict = status === 'conflict';
     hideConflict();
     if (choice === 'cancel') {
       ready = false;
@@ -274,12 +315,9 @@
     }
     try {
       if (choice === 'drive') {
-        await recoverFromDrive();
+        // The conflict dialog choice is already the user's confirmation.
+        await recoverFromDrive({ automatic: wasConflict });
       } else if (choice === 'local') {
-        if (!confirm('Replace the Google Drive backup with the notes on this device?')) {
-          showStatus('conflict', 'Choose which notes to keep');
-          return;
-        }
         remoteFile = await currentFileVersion();
         ready = true;
         await syncNow({ force: true });
@@ -296,6 +334,7 @@
     remoteFile = await findBackupFile();
     remoteSnapshot = null;
     const local = await callbacks.getSnapshot();
+    hasLocalNotes = !!local.notes.length;
 
     if (!remoteFile) {
       ready = true;
@@ -311,13 +350,49 @@
       return;
     }
     if (dataMatches(local, remote)) {
+      rememberBackup();
       ready = true;
       showStatus('ready', 'Up to date on Google Drive');
       return;
     }
+
+    // This browser already chose this same file. If Drive hasn't changed,
+    // keep backing up pending local edits without asking again.
+    const previous = lastConnectedBackup();
+    if (previous?.id === remoteFile.id && previous.version === String(remoteFile.version)) {
+      ready = true;
+      showStatus('ready', 'Connected • backing up local changes');
+      await syncNow();
+      return;
+    }
+
     ready = false;
-    showStatus('conflict', 'Local and Drive notes differ — choose one');
-    showConflict();
+    showStatus('conflict', 'Local and Drive notes differ — review in Settings');
+    // Only a first-time connection needs the initial choice dialog.
+    if (previous?.id !== remoteFile.id) showConflict();
+  }
+
+  // Ask only on an empty browser. Never interrupt editing or hide existing notes.
+  function dismissWelcome() {
+    const dialog = element('driveWelcomeOverlay');
+    if (dialog) dialog.hidden = true;
+    try { localStorage.setItem(WELCOME_DISMISS_KEY, '1'); } catch (_) { /* Optional. */ }
+  }
+
+  async function offerRecovery() {
+    if (!callbacks?.getSnapshot) return;
+    try {
+      const local = await callbacks.getSnapshot();
+      hasLocalNotes = !!local.notes.length; // Includes archived and trashed notes.
+      showStatus(status, statusText);
+      if (hasLocalNotes || !configured() || authorized) return;
+      if (localStorage.getItem(WELCOME_DISMISS_KEY)) return;
+      if (!element('editorOverlay')?.hidden || !element('settingsOverlay')?.hidden) return;
+      const dialog = element('driveWelcomeOverlay');
+      if (!dialog) return;
+      dialog.hidden = false;
+      element('driveWelcomeConnect')?.focus();
+    } catch (error) { console.warn('Could not check local notes for recovery', error); }
   }
 
   function connect() {
@@ -370,6 +445,7 @@
         return true;
       }
       if (!force && remoteSnapshot && dataMatches(snapshot, remoteSnapshot)) {
+        rememberBackup();
         showStatus('ready', 'Up to date on Google Drive');
         return true;
       }
@@ -379,6 +455,7 @@
       else { remoteFile = await uploadNew(exported); result = true; }
       if (!result) return false;
       remoteSnapshot = exported;
+      rememberBackup();
       showStatus('ready', 'Backed up to Google Drive');
       return true;
     } catch (error) {
@@ -403,7 +480,11 @@
     showStatus('pending', 'Changes saved locally • backup in 15 seconds');
   }
 
-  function onLocalSaved() { scheduleBackup(); }
+  function onLocalSaved() {
+    hasLocalNotes = true;
+    if (element('driveEmptyConnect')) element('driveEmptyConnect').hidden = true;
+    scheduleBackup();
+  }
 
   function disconnect() {
     clearTimer();
@@ -432,6 +513,19 @@
     element('driveConflictDrive')?.addEventListener('click', () => resolveConflict('drive'));
     element('driveConflictLocal')?.addEventListener('click', () => resolveConflict('local'));
     element('driveConflictCancel')?.addEventListener('click', () => resolveConflict('cancel'));
+    element('driveWelcomeConnect')?.addEventListener('click', () => {
+      dismissWelcome();
+      connect();
+    });
+    element('driveWelcomeSkip')?.addEventListener('click', dismissWelcome);
+    element('driveWelcomeOverlay')?.addEventListener('click', event => {
+      if (event.target === element('driveWelcomeOverlay')) dismissWelcome();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !element('driveWelcomeOverlay')?.hidden) dismissWelcome();
+    });
+    // Jotboard passes callbacks only after IndexedDB has loaded successfully.
+    setTimeout(offerRecovery, 450);
   }
 
   window.JotboardDrive = { initialize, onLocalSaved, syncNow, connect, disconnect, getStatus: () => ({ status, statusText }) };
